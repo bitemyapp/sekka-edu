@@ -5,11 +5,11 @@
 use aizome_kit::layout::{Point, Rect};
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::kurbo::RoundedRect;
-use aizome_kit::sidestep_ui::{Color, StrokeStyle};
+use aizome_kit::sidestep_ui::{Canvas, Color, StrokeStyle, TextStyle};
 use aizome_kit::theme::FontSpec;
 use aizome_kit::{column, row};
 use sekka_kid::clock;
-use sekka_kid::report::{DayPlay, Report};
+use sekka_kid::report::{AppSummary, DayPlay, Report};
 
 use crate::avatar::{self, Mood};
 
@@ -37,12 +37,14 @@ pub fn skill_name(id: &str) -> String {
     }
 }
 
-/// Minutes as "1 h 5 min", "12 min", "under a minute".
+/// Minutes as "1 h 5 min", "12 min", "under a minute"; from ten hours,
+/// whole hours ("12 h").
 pub fn minutes(m: f64) -> String {
     let m = m.round() as i64;
     match m {
         0 => "under a minute".into(),
         1..=59 => format!("{m} min"),
+        600.. => format!("{} h", (m + 30) / 60),
         _ if m % 60 == 0 => format!("{} h", m / 60),
         _ => format!("{} h {} min", m / 60, m % 60),
     }
@@ -66,6 +68,22 @@ fn rounds(n: u32) -> String {
     if n == 1 { "1 round".into() } else { format!("{n} rounds") }
 }
 
+/// An app's line in the legend: its time, and its rounds, stars and first
+/// tries where it has any ("9 min" alone for an app played without rounds).
+fn app_line(a: &AppSummary) -> String {
+    let mut parts = vec![minutes(a.minutes)];
+    if a.rounds > 0 {
+        parts.push(rounds(a.rounds));
+    }
+    if a.stars > 0 {
+        parts.push(format!("{} ★", a.stars));
+    }
+    if a.items > 0 {
+        parts.push(format!("{} right first time", percent(Some(f64::from(a.first_try) / f64::from(a.items)))));
+    }
+    parts.join(" · ")
+}
+
 fn stars(n: u8) -> String {
     (0..3).map(|i| if i < n { '★' } else { '☆' }).collect()
 }
@@ -78,7 +96,6 @@ fn tile<M: Send + 'static>(value: String, label: &str) -> Element<M> {
     .padding([10.0, 14.0])
     .fill(Tone::Raised)
     .border(Edge::Line)
-    .width(Length::FillPortion(1))
     .into()
 }
 
@@ -89,25 +106,57 @@ fn app_color(i: usize) -> Color {
 
 #[derive(Clone, Debug, PartialEq, Hash)]
 struct Chart {
-    /// Each day: its label and minutes by app (in `apps` order), in tenths.
-    days: Vec<(String, Vec<u32>)>,
+    /// Each day, and its minutes by app (in `apps` order), in tenths.
+    days: Vec<(clock::Day, Vec<u32>)>,
     limit: Option<u32>,
 }
 
+/// The days a report covers, as a caption says them: "25–31 Oct",
+/// "18 Oct – 6 Nov".
+fn span(days: &[DayPlay]) -> String {
+    let (Some(a), Some(b)) = (days.first().map(|d| d.day), days.last().map(|d| d.day)) else {
+        return String::new();
+    };
+    if (a.year, a.month) == (b.year, b.month) {
+        format!("{}–{}", a.day, b.short())
+    } else {
+        format!("{} – {}", a.short(), b.short())
+    }
+}
+
 /// Minutes a day, stacked by app, with the day's allowance as a line.
+/// Weekends are shaded. Days are labelled "Sun 25" where there's room;
+/// otherwise by the date over the weekday's initial; and in a narrow
+/// window, every other date (or fewer), always ending on today.
 fn chart<M: Send + 'static>(days: &[DayPlay], apps: &[String], limit: Option<u32>) -> Element<M> {
     let state = Chart {
         days: days
             .iter()
             .map(|d| {
-                let label = format!("{} {}", d.day.weekday_name(), d.day.day);
-                (label, apps.iter().map(|a| (d.minutes.get(a).copied().unwrap_or(0.0) * 10.0).round() as u32).collect())
+                (d.day, apps.iter().map(|a| (d.minutes.get(a).copied().unwrap_or(0.0) * 10.0).round() as u32).collect())
             })
             .collect(),
         limit,
     };
     canvas(state, |c, b, s, theme| {
-        let plot = Rect::new(b.x0 + 34.0, b.y0 + 8.0, b.x1 - 8.0, b.y1 - 22.0);
+        let label = theme.style(FontSpec::ui(11.0), theme.role(Role::Text2));
+        let initial = theme.style(FontSpec::ui(10.0), theme.role(Role::Text3));
+        let full = |d: &clock::Day| format!("{} {}", d.weekday_name(), d.day);
+        let n = s.days.len().max(1);
+        let slot = (b.width() - 42.0) / n as f64;
+        let widest = s.days.iter().map(|(d, _)| width(&full(d), &label)).fold(0.0, f64::max);
+        let whole = widest + 8.0 <= slot;
+        // Every `every`th date, counted back from today, when even dates
+        // alone would touch.
+        let every = ((width("28", &label) + 6.0) / slot).ceil().max(1.0) as usize;
+        let plot = Rect::new(b.x0 + 34.0, b.y0 + 8.0, b.x1 - 8.0, b.y1 - if whole || every > 1 { 22.0 } else { 34.0 });
+        let slot = plot.width() / n as f64;
+        for (i, (d, _)) in s.days.iter().enumerate() {
+            if d.weekday == 0 || d.weekday == 6 {
+                let x = plot.x0 + slot * i as f64;
+                c.fill_rect(Rect::new(x.round(), plot.y0, (x + slot).round(), plot.y1), theme.sunk());
+            }
+        }
         let most = s.days.iter().map(|(_, v)| v.iter().sum::<u32>()).max().unwrap_or(0) as f64 / 10.0;
         let top = most.max(f64::from(s.limit.unwrap_or(0))).max(10.0);
         let step = if top > 60.0 {
@@ -126,10 +175,7 @@ fn chart<M: Send + 'static>(days: &[DayPlay], apps: &[String], limit: Option<u32
             c.draw_label(&format!("{m:.0}"), &small, Point::new(b.x0, y(m) - 7.0));
             m += step;
         }
-        let n = s.days.len().max(1) as f64;
-        let slot = plot.width() / n;
-        let label = theme.style(FontSpec::ui(11.0), theme.role(Role::Text2));
-        for (i, (day, mins)) in s.days.iter().enumerate() {
+        for (i, (d, mins)) in s.days.iter().enumerate() {
             let x = plot.x0 + slot * i as f64 + slot * 0.2;
             let w = slot * 0.6;
             let mut base = 0.0;
@@ -142,8 +188,15 @@ fn chart<M: Send + 'static>(days: &[DayPlay], apps: &[String], limit: Option<u32
                 c.fill(&RoundedRect::from_rect(r, 2.0), app_color(k));
                 base += v;
             }
-            let lw = aizome_kit::sidestep_ui::measure(day, &label).width;
-            c.draw_label(day, &label, Point::new(x + w / 2.0 - lw / 2.0, plot.y1 + 5.0));
+            let mid = x + w / 2.0;
+            if whole {
+                centred(c, mid, &full(d), &label, plot.y1 + 5.0);
+            } else if (n - 1 - i) % every == 0 {
+                centred(c, mid, &d.day.to_string(), &label, plot.y1 + 5.0);
+                if every == 1 {
+                    centred(c, mid, &d.weekday_name()[..1], &initial, plot.y1 + 18.0);
+                }
+            }
         }
         if let Some(l) = s.limit {
             let ly = y(f64::from(l)).round();
@@ -157,6 +210,15 @@ fn chart<M: Send + 'static>(days: &[DayPlay], apps: &[String], limit: Option<u32
     })
     .height(180.0)
     .into()
+}
+
+fn width(t: &str, style: &TextStyle) -> f64 {
+    aizome_kit::sidestep_ui::measure(t, style).width
+}
+
+/// `t` centred on `mid`, its top at `top`.
+fn centred(c: &mut Canvas, mid: f64, t: &str, style: &TextStyle, top: f64) {
+    c.draw_label(t, style, Point::new(mid - width(t, style) / 2.0, top));
 }
 
 /// The report.
@@ -187,14 +249,17 @@ pub fn view<M: Clone + Send + 'static>(r: &Report) -> Element<M> {
 
     let t = &r.totals;
     let days = r.days.len();
-    let tiles = row![
-        tile(minutes(t.minutes), &format!("played in {days} days")),
-        tile(format!("{} of {days}", t.days_played), "days played"),
-        tile(format!("{}", t.sittings), "sittings"),
-        tile(format!("{} of {}", t.finished, t.rounds), "rounds finished"),
-        tile(percent(t.accuracy()), "right first time"),
-    ]
-    .spacing(10.0);
+    let tiles = crate::tiles::tiles(
+        vec![
+            tile(minutes(t.minutes), &format!("played in {days} days")),
+            tile(format!("{} of {days}", t.days_played), "days played"),
+            tile(format!("{}", t.sittings), "sittings"),
+            tile(format!("{} of {}", t.finished, t.rounds), "rounds finished"),
+            tile(percent(t.accuracy()), "right first time"),
+        ],
+        125.0,
+        10.0,
+    );
     let mut more = Vec::new();
     if let Some(ms) = t.median_response_ms {
         more.push(format!("Answers in about {:.1} s", f64::from(ms) / 1000.0));
@@ -217,20 +282,7 @@ pub fn view<M: Clone + Send + 'static>(r: &Report) -> Element<M> {
                 canvas(i, |c, b, i, _| c.fill(&RoundedRect::from_rect(b.inflate(-2.0, -2.0), 2.0), app_color(*i)))
                     .width(12.0)
                     .height(12.0);
-            row![
-                swatch,
-                text(a.name.clone()).semibold(),
-                text(format!(
-                    "{} · {} · {} ★ · {} right first time",
-                    minutes(a.minutes),
-                    rounds(a.rounds),
-                    a.stars,
-                    percent((a.items > 0).then(|| f64::from(a.first_try) / f64::from(a.items)))
-                ))
-                .role(Role::Text2),
-            ]
-            .spacing(8.0)
-            .into()
+            row![swatch, text(a.name.clone()).semibold(), text(app_line(a)).role(Role::Text2),].spacing(8.0).into()
         })
         .collect();
 
@@ -293,11 +345,11 @@ pub fn view<M: Clone + Send + 'static>(r: &Report) -> Element<M> {
         })
         .collect();
 
-    let mut page: Vec<Element<M>> = vec![header.into(), tiles.into()];
+    let mut page: Vec<Element<M>> = vec![header.into(), tiles];
     if !more.is_empty() {
-        page.push(text(more.join(" · ")).role(Role::Text2).into());
+        page.push(text(more.join(" · ")).role(Role::Text2).wrap().into());
     }
-    page.push(caption("Minutes a day"));
+    page.push(caption(format!("Minutes a day · {}", span(&r.days))));
     page.push(chart(&r.days, &order, kid.daily_minutes));
     page.push(aizome_kit::widgets::layout::column(legend).spacing(6.0).into());
     if !skills.is_empty() {
