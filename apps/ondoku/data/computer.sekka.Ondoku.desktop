@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Ondoku
+GenericName=Reading Buddy
+Comment=Read aloud to Fumi the owl, who listens, follows along and helps
+Keywords=reading;read aloud;books;phonics;stories;ondoku;kids;children;kindergarten;
+Categories=Education;Literature;KidsGame;
+Icon=computer.sekka.Ondoku
+Exec=sekka-ondoku
+Terminal=false
+StartupNotify=true
+StartupWMClass=computer.sekka.Ondoku

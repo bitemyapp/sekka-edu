@@ -47,6 +47,10 @@ pub struct Round {
     /// The middle time from a question to its right answer.
     #[serde(default)]
     pub response_ms: Option<u32>,
+    /// Reading aloud: words a minute (read alone or helped), when there was
+    /// enough reading to tell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words_per_minute: Option<u32>,
 }
 
 /// After this long without input, a kid has stopped playing.

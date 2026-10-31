@@ -1,0 +1,21 @@
+title: Ten Red Hens
+level: 1
+skills: short-e, sight-words, fluency
+cover: house, #c2452d
+about: Meg has ten red hens, and one of them has a secret.
+
+Ten red hens sit in a pen.
+===
+The hens peck and peck.
+===
+Meg has a pet hen. The pet hen is Red.
+===
+Red hops up on the pen.
+===
+"Get back, Red!" said Meg.
+===
+Red sits on a nest. Red will not get up.
+===
+What is in the nest?
+===
+Ten eggs! Red is a mom.

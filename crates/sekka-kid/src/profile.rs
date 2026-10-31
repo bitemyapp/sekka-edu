@@ -92,10 +92,13 @@ pub enum Grade {
     First,
     Second,
     Third,
+    Fourth,
+    Fifth,
 }
 
 impl Grade {
-    pub const ALL: [Grade; 5] = [Grade::Preschool, Grade::Kindergarten, Grade::First, Grade::Second, Grade::Third];
+    pub const ALL: [Grade; 7] =
+        [Grade::Preschool, Grade::Kindergarten, Grade::First, Grade::Second, Grade::Third, Grade::Fourth, Grade::Fifth];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -104,6 +107,8 @@ impl Grade {
             Grade::First => "1st grade",
             Grade::Second => "2nd grade",
             Grade::Third => "3rd grade",
+            Grade::Fourth => "4th grade",
+            Grade::Fifth => "5th grade",
         }
     }
 
@@ -115,6 +120,8 @@ impl Grade {
             Grade::First => "1st",
             Grade::Second => "2nd",
             Grade::Third => "3rd",
+            Grade::Fourth => "4th",
+            Grade::Fifth => "5th",
         }
     }
 }

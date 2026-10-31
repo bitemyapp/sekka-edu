@@ -1,0 +1,33 @@
+[package]
+name = "sekka-ondoku"
+description = "Ondoku 音読, a reading buddy: kids read aloud to Fumi the owl, who listens, follows along and helps"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sekka_ondoku"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sekka-ondoku"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-koe.workspace = true
+sekka-kid.workspace = true
+sekka-kid-kit.workspace = true
+sekka-voice.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc.workspace = true
+log.workspace = true
+env_logger.workspace = true
+tokio = { version = "1", features = ["rt", "process", "io-util", "time", "sync", "macros"] }
+
+[features]
+# Whisper's matrix work through OpenBLAS (the package's build).
+openblas = ["aizome-koe/openblas"]

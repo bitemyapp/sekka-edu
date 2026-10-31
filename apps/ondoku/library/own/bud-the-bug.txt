@@ -1,0 +1,23 @@
+title: Bud the Bug
+level: 1
+skills: short-a, short-i, short-o, short-u, short-e, sight-words, fluency
+cover: bug, #7a55b8
+about: Bud is a little bug. A big duck is in the pond!
+
+Bud is a bug. Bud has six legs.
+===
+Bud can zig and zag and zip.
+===
+Bud zips up a stem. Bud sits on top.
+===
+Bud can see the pond.
+===
+A big duck is in the pond!
+===
+The duck can see Bud.
+===
+Bud runs and hops in a gap.
+===
+The duck can not get Bud. Bud is snug in the gap.
+===
+"Yes!" said Bud.

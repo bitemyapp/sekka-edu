@@ -1,0 +1,21 @@
+title: The Green Seed
+level: 2
+skills: vowel-teams, fluency
+cover: leaf, #4f9b3a
+about: Jay plants a seed and waits. What will it be?
+
+Jay has a seed. It is a little green seed.
+===
+Jay digs a hole and plants the seed. "Grow, seed, grow," he says.
+===
+Each day, Jay gives the seed a drink of rain from a pail.
+===
+The sun shines. The rain falls. Jay waits and waits.
+===
+One day, a green sprout peeks up out of the soil.
+===
+The sprout grows and grows. It gets leaves. It gets a bud.
+===
+Then one morning, the bud opens. It is a big yellow flower!
+===
+"Hooray!" said Jay. "My seed is a flower. I need more seeds!"

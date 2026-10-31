@@ -1,0 +1,23 @@
+title: Tim Can Dig
+level: 1
+skills: short-i, sight-words, fluency
+cover: leaf, #43a85f
+about: Kim and Tim dig and dig. What is in the big tin?
+
+Tim can dig.
+===
+Tim digs and digs.
+===
+Kim has a big bag. Kim can dig, and Tim can fill the bag.
+===
+Dig, dig, dig! Tim hits a tin.
+===
+It is a big tin. What is in it?
+===
+Kim lifts the lid.
+===
+It is a map! The map has a pin.
+===
+Kim and Tim dig at the pin.
+===
+It is a tin of jam! Kim and Tim grin.

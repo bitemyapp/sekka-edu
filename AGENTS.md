@@ -11,7 +11,8 @@ and test. Develop on a topic branch from main.
 - Kids' apps: no streaks, currencies or pressure. Let rounds finish before
   the day's allowance ends play. Put grown-ups' choices behind the gate, and
   keep everything on the machine.
-- Report honestly: these apps have run in headless tests, not yet in a live
-  session or with children. Say which you checked.
+- Report honestly: Anzan has run in a live session, Ondoku only in headless
+  tests (and with a computer voice reading to it), neither with children.
+  Say which you checked.
 - README prose describes the experience and its limits for families.
   Implementation details belong in DEVELOPERS.md.

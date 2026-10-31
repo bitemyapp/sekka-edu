@@ -8,17 +8,22 @@
 | `crates/sekka-kid-kit` | What apps share on screen, on Aizome's kit: the kids' look and stage, animal avatars, "Who's playing?", the new-player form, the grown-ups' door, the report view, and one-instance launching (Soroban's). |
 | `crates/sekka-voice` | The voice apps speak with: Kokoro-82M through sherpa-onnx, or espeak-ng. Speaks on its own thread, keeps what it has said, makes lines ahead. No kit. |
 | `apps/anzan` | Anzan, the mental abacus (`sekka-anzan`). |
+| `apps/ondoku` | Ondoku, the reading buddy (`sekka-ondoku`), and its books (`library/`). |
 | `apps/kids` | Sekka Kids, profiles and reports for grown-ups (`sekka-kids`). |
 | `docs/ideas.md` | Ideas for what else to make. |
 | `nix/package.nix`, `flake.nix` | The package, built against Aizome's kit from a pinned Sekka. |
 | `nix/kokoro.nix` | Kokoro's model, as sherpa-onnx packs it. |
+| `nix/whisper-base-en.nix` | The Whisper model Ondoku listens with, pinned as Koe pins it. |
+| `tools/voice-check` | Compare voices by what Whisper hears of them. |
 | `scripts/wx` | Build and test on wx-workstation. |
 
 ## The kit comes from Sekka
 
 The workspace takes `aizome-kit` by path from a Sekka checkout beside this
 one: `../sekka/desktop/aizome/crates/aizome-kit`. The kit takes Sukumo and its
-sibling crates from the same tree. This is Uta's arrangement, with Sekka in
+sibling crates from the same tree. Ondoku takes Koe, Aizome's dictation
+(`apps/koe`, as the library `koe`), the same way, with its own sibling
+`aizome-ipc`. This is Uta's arrangement, with Sekka in
 place of Aizome's former repository. Develop with a checkout, or a worktree,
 at `../sekka`, inside its `nix develop .#aizome` shell. The shell has Rust
 1.95, the libraries the kit loads, and `AIZOME_FONT_DIR`.
@@ -54,8 +59,11 @@ roots Sekka's `#aizome` dev shell for `SEKKA_REV` and builds Aizome's fonts
 once. `run` does both, then runs the command in the dev shell with
 `CARGO_TARGET_DIR` on `/dev/shm` and the rustc wrapper run by bash. wx's
 `/bin/sh` is dash, which drops the hyphenated variables the kit's tests need.
-The sync is one way: copy back a `Cargo.lock` that cargo changed there, or
-build with `--locked`.
+It also fetches Andika once, for Ondoku's pages
+(`SEKKA_EDU_READING_FONT`). It builds whisper.cpp for any x86-64 with AVX2
+(`GGML_NATIVE=OFF`), not just wx's Zen 5, so binaries built there run on the
+laptop. The sync is one way: copy back a `Cargo.lock` that cargo changed
+there, or build with `--locked`.
 
 The tests:
 
@@ -69,15 +77,34 @@ The tests:
   where they're drawn, its log and progress, the daily allowance and the
   grown-ups' door, keys, peeks, and pictures of every screen by Day and Night.
 - `apps/kids/tests/kids.rs`: a report across two apps, the door before
-  changes, a daily limit reaching the report, removing a kid, and pictures.
+  changes, a daily limit reaching the report, reading rounds counted in
+  words, removing a kid, and pictures.
+- Ondoku's units:
+  - printed and heard words (punctuation, numbers, words that sound the
+    same);
+  - following a page (skips, misreadings, going back, guesses, help);
+  - phonics chunks, the book format and pagination;
+  - every bundled book reading;
+  - a check that every word of the first books can be sounded out with the
+    short vowels taught so far, or is one of the listed sight words.
+- `apps/ondoku/tests/ondoku.rs`, with pretended ears (what's heard is sent
+  in): a first reader, a whole book read to Fumi and its log, a word tapped
+  where it's drawn, help when stuck, the day ending at a page, every page of
+  every book fitting on the paper in its level's type, and pictures.
+- `apps/ondoku/tests/ears.rs` (`--ignored`, needs Kokoro, sherpa-onnx and a
+  Whisper model): real listening through Koe, with Kokoro reading a page to
+  a pretend `pw-record`. Whisper hears it in stretches cut at the pauses, and
+  the page is followed to its end. A word read wrongly ("red" for "tan") is
+  marked, not taken as read.
 
 The pictures in `tests/golden` are drawn at scale 1 with Aizome's fonts.
 `AIZOME_UPDATE_GOLDENS=1` redraws them; look at them before committing.
 
-These are component tests. Nothing here has run in a live Aizome session or
-been played by children. To run a window without touching a live session, use
-the headless sway in `sukumo/scripts/headless-wayland`, with `WAYLAND_DISPLAY`
-and `DISPLAY` unset.
+These are component tests. Anzan has run in a live Aizome session; Ondoku
+hasn't been tried by a person reading to it, and neither app has been played
+by children. To run a window without touching a live session, use the
+headless sway in `sukumo/scripts/headless-wayland`, with `WAYLAND_DISPLAY` and
+`DISPLAY` unset.
 
 ## Sekka Kid: the shared data
 
@@ -169,6 +196,96 @@ wx-workstation (load average 11 to 20, shared) on 2026-10-31:
 A blink redraws the awake beads' rods and Pon, about 5 ms every 3.7 s.
 Aizome's budget is 4 ms from an event to its frame: slides are inside it,
 whole-window changes aren't yet.
+
+## Ondoku's parts
+
+| Module | What |
+| --- | --- |
+| `library` | The books: their file format, the shelves (levels 1 to 4 for kindergarten, 1st, 2nd–3rd and 4th–5th grade), and splitting pages too long for their level's type. `build.rs` bundles every file under `library/`. |
+| `words` | Words as printed (punctuation kept for drawing) and as said: a key that's lower case, without punctuation, numbers in words, and sound-alikes (there, their) taken as the same. |
+| `follow` | A page being read: what Whisper heard lined up with the words still to read, the words read, helped with and missed, and how far a guess mid-sentence has the reader. |
+| `listen` | Fumi's ears: the microphone through `pw-record`, Whisper through Koe, stretches of reading cut at pauses, guesses while a stretch goes on, "stuck" after a quiet, and a mute while Fumi talks. |
+| `phonics` | A word in the pieces it's sounded out in (sh, ee, igh, a silent e), for the first books. |
+| `progress` | What Ondoku keeps for each kid: bookmarks, times through each book, words a minute, the grown-ups' choices. |
+| `scene`, `art` | The screens as one canvas in the 1000 × 700 design: the shelves, covers, a page laid out word by word (so each can be lit and tapped), Fumi, the microphone's rings. |
+| `app` | The program: who's reading, the shelves, a book read to Fumi or by her, help, the log, the allowance, the grown-ups' sheet. |
+
+**Koe as a library.** Ondoku depends on `aizome-koe` by path and uses its
+library:
+- `koe::engine::Recognizer`: Whisper through whisper.cpp, the model kept
+  loaded, `with_prompt` per page.
+- `koe::audio`'s `PcmDecoder`, `rms` and `has_signal`: PipeWire's raw
+  samples, loudness, and the gate that keeps silence from Whisper.
+- `koe::models`: Koe's pinned catalogue and the folder its downloads go to.
+
+The model is `SEKKA_EDU_WHISPER`, which the package sets to Whisper base.en
+(`nix/whisper-base-en.nix`, Koe's own pin), or else one Koe has downloaded,
+English ones first. Ondoku doesn't use Koe's session service: it records for
+itself, and only while the green button is on.
+
+**Listening.**
+- The ears run on a thread of their own with a small Tokio runtime. They
+  record 16 kHz mono and cut a stretch at a 0.7 s pause, or at 12 s. Each
+  stretch goes to Whisper, prompted with "A child reading aloud." and the
+  page's words, Koe's way of hinting vocabulary.
+- While a stretch goes on, a guess is made at it every second, so the page
+  can show how far the reader has got.
+- Four seconds of quiet after reading has begun is "stuck". Forty switch the
+  microphone off.
+- Whenever Fumi speaks, the voice says for how long (`sekka-voice`'s
+  `on_speaking`), and the ears hear nothing for that time, so her voice
+  isn't taken for the reader's.
+
+**Following.** `follow::Page::hear` lines up the heard words with the
+printed words still to read: an edit distance in which a printed word not
+heard costs 1, a different word heard in its place costs 1, and a heard
+word not on the page costs 0.6, so repeats and "um"s are cheap. The page
+moves on to just after the last printed word heard. A word left out or
+misread before it is marked missed; a misread last word isn't passed.
+Words match as printed, sounding the same, with or without a final s, or
+(five letters and up) one letter off. Fumi is generous on purpose.
+
+**The library.** `library/<shelf>/<id>.txt`: `key: value` lines (`title`,
+`author`, `year`, `source`, `level`, `skills`, `cover`, `about`), a blank
+line, then pages separated by `===` lines.
+- Paragraphs, or stanzas, are separated by blank lines. Lines of verse stay
+  on lines of their own.
+- `cover` is an animal from the avatars or a Lucide icon the kit has, and a
+  colour.
+- `skills` names what a book practises, for Sekka Kids' report: the phonics
+  patterns, `sight-words`, `fluency`, `expression`, `rhyme`, `poetry` and
+  `vocabulary`.
+- `library/own` holds the books written for Ondoku, in the order phonics is
+  usually taught:
+  - Level 1: short a, i, o, u and e, then all of them, with a few first
+    sight words. A test checks every word can be sounded out with the
+    vowels taught so far.
+  - Level 2: letter pairs, blends, silent e and vowel teams.
+  - Level 3: r-controlled vowels, dialogue, riddles, non-fiction.
+  - Level 4: longer narrative and non-fiction.
+- `library/classics` holds public-domain books from Project Gutenberg, with
+  their header and licence removed. `library/SOURCES.md` lists each one's
+  ebook number, what was included, and what was left out and why.
+- At launch, a page that won't fit on the paper in its level's type (36, 32,
+  24 and 22 px from level 1 up) is split: at paragraphs, then lines of verse
+  or sentences, then words.
+
+**Type.** Pages are set in Andika (SIL, OFL), made for children learning to
+read: `SEKKA_EDU_READING_FONT` names its regular file. The package and
+`scripts/wx` set it. Without it, pages are set in Archivo, and the pictures
+won't match.
+
+**What's logged.** Each sitting with a book is one `round`:
+- `activity` is the book's id and `skills` its skills.
+- `items` is the words on the pages read, `first_try` the words read alone,
+  and `hints` the words Fumi said.
+- `finished` means it was read to the end, and `words_per_minute` is the
+  words read or helped with over the time from the first sound of reading
+  on each page to the last word heard.
+- Milestones are a book read to the end, and read three times.
+
+Sekka Kids shows rounds that practise `fluency` in words, not questions.
+The day's allowance ends reading at a page turn, with the next page kept.
 
 ## The voice
 
