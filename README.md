@@ -138,7 +138,8 @@ leaves the computer.
   microphone, and Whisper's model is 148 MB of the package.
 - **The voice takes room and a moment.** Pon and Fumi speak with Kokoro,
   whose model is 362 MB of the package, and each app uses about half a
-  gigabyte of memory with it loaded. A line not said before takes a moment
+  gigabyte of memory with it loaded (Ondoku more while Fumi listens, with
+  Whisper loaded too). A line not said before takes a moment
   to make the first time (the apps make lines they expect to need while the
   kid listens), and is kept after that. Built without Kokoro, they speak
   with espeak-ng, which is robotic and harder to follow.
