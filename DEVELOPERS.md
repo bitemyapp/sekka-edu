@@ -92,8 +92,10 @@ The tests:
   where it's drawn, help when stuck, Fumi waiting while a word is tried
   (not while the kid is reading, not before she's heard their try, and not
   moving on to the next word by herself), a first word misread still
-  helped, the day ending at a page, every page of every book fitting on the
-  paper in its level's type, and pictures.
+  helped, a word misread practised before the page is praised (its wrong
+  sound lit), one still wrong said for the reader, one fixed by the reader
+  left alone, the day ending at a page, every page of every book fitting
+  on the paper in its level's type, and pictures.
 - `apps/ondoku/tests/ears.rs` (`--ignored`, needs Kokoro, sherpa-onnx and a
   Whisper model): real listening, with Kokoro reading a page to a pretend
   `pw-record` at a microphone's pace. Whisper hears it in stretches cut at
@@ -293,6 +295,29 @@ Then she says the word, and it counts as helped. A try that's right moves
 the page on without her. She doesn't go on to the next word by herself;
 the next help comes after the reader's next quiet. On the higher shelves
 she says the word at the quiet.
+
+**Practice.** A word misread or left out is practised, in the way reading
+tutors call pause, prompt, praise:
+- **Pause.** When the reader stops for 1.5 s after reading, or at the end
+  of the page, a word missed behind them that they haven't fixed is asked
+  about. A word they fixed (going back over it), or read right further on
+  the page, isn't. With help switched off, nothing is.
+- **Prompt.** "Not quite! Look at this word again" for a word misread,
+  "You skipped this word" for one left out. The word is outlined, and on
+  the first two shelves its sounds show over it. When one sound is all
+  that was wrong, as "bad" for "Bud", that sound is lit: "Look at this
+  sound, and read the word again". `phonics::wrong_piece` finds it from
+  what was heard in its place (`Page::heard_as`).
+- **Praise.** "Yes, Bud!", then the next word missed, or back to reading,
+  or "You read the whole page!"
+- A try that's still wrong, or none in the time she waits for one (as for
+  a word sounded out): "It says Bud. Can you say Bud?" Wrong again, or
+  nothing: "That's Bud", and Fumi goes on.
+
+A word practised counts as helped, everywhere it was missed on the page.
+The page isn't praised until its missed words have been practised.
+Reading on instead (three words or more that follow the page) leaves the
+word missed, and Fumi follows. Each word is asked about once a page.
 
 **The library.** `library/<shelf>/<id>.txt`: `key: value` lines (`title`,
 `author`, `year`, `source`, `level`, `skills`, `cover`, `about`), a blank

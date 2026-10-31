@@ -23,6 +23,9 @@ pub enum Mark {
 pub struct Page {
     pub words: Vec<Word>,
     pub marks: Vec<Mark>,
+    /// What was heard in a missed word's place, if anything was (a word
+    /// misread, not left out).
+    pub heard_as: Vec<Option<String>>,
     /// The first word not yet read.
     pub next: usize,
     /// How far a guess heard mid-sentence has the reader (at least `next`).
@@ -92,7 +95,8 @@ impl Page {
     pub fn new(text: &str) -> Page {
         let words = words::words(text);
         let marks = vec![Mark::Unread; words.len()];
-        let mut p = Page { words, marks, next: 0, ahead: 0, started: None, ended: None };
+        let heard_as = vec![None; words.len()];
+        let mut p = Page { words, marks, heard_as, next: 0, ahead: 0, started: None, ended: None };
         p.pass_unspoken();
         p.ahead = p.next;
         p
@@ -191,26 +195,32 @@ impl Page {
         };
         self.corrected(&heard[..back]);
         let Some((window, steps, reached)) = followed else { return false };
-        let mut at = 0;
+        // Where each step is, in the printed words and the heard ones.
+        let (mut at, mut h) = (0, 0);
         for s in steps {
             if at >= reached {
                 break;
             }
             let i = window[at];
             match s {
-                Step::Match(_) => {
+                Step::Match(k) => {
                     if self.marks[i] == Mark::Unread {
                         self.marks[i] = Mark::Read;
                     }
                     at += 1;
+                    h += k;
                 }
                 Step::Swap | Step::Skip => {
                     if self.marks[i] == Mark::Unread {
                         self.marks[i] = Mark::Missed;
+                        if s == Step::Swap {
+                            self.heard_as[i] = Some(heard[h].clone());
+                        }
                     }
                     at += 1;
+                    h += usize::from(s == Step::Swap);
                 }
-                Step::Extra => {}
+                Step::Extra => h += 1,
             }
         }
         // Dashes between the words passed.
@@ -279,12 +289,14 @@ impl Page {
         *self = Page {
             words: std::mem::take(&mut self.words),
             marks: Vec::new(),
+            heard_as: Vec::new(),
             next: 0,
             ahead: 0,
             started: None,
             ended: None,
         };
         self.marks = vec![Mark::Unread; self.words.len()];
+        self.heard_as = vec![None; self.words.len()];
         self.pass_unspoken();
         self.ahead = self.next;
     }
@@ -322,6 +334,7 @@ mod tests {
         let mut p = Page::new("The big red hen sat on the nest.");
         p.hear("The big hen sat", 0);
         assert_eq!(marks(&p), "rrmrr...");
+        assert_eq!(p.heard_as[2], None, "left out, not misread");
         assert_eq!(p.next, 5);
     }
 
@@ -340,6 +353,7 @@ mod tests {
         let mut p = Page::new("The big red hen sat on the nest.");
         p.hear("The big rod hen sat", 0);
         assert_eq!(marks(&p), "rrmrr...");
+        assert_eq!(p.heard_as[2].as_deref(), Some("rod"), "what was read in its place");
         assert!(!p.hear("red", 0), "fixing a word doesn't move the page");
         assert_eq!((marks(&p).as_str(), p.next), ("rrrrr...", 5));
         // Going back over it on the way on fixes it too; saying it wrong

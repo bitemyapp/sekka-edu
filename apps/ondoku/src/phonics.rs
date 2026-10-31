@@ -47,6 +47,25 @@ pub fn chunks(word: &str) -> Vec<Chunk> {
     out
 }
 
+/// The piece of a word read wrong as `heard`, when it's the only one that
+/// differs and the word was read with as many letters: "bud" read as
+/// "bad" is the u, "ship" read as "chip" the sh.
+pub fn wrong_piece(pieces: &[Chunk], heard: &str) -> Option<usize> {
+    let mut printed = Vec::new();
+    for (k, p) in pieces.iter().enumerate() {
+        printed.extend(p.text.chars().map(|c| (k, c.to_ascii_lowercase())));
+    }
+    let heard: Vec<char> = heard.chars().filter(|c| c.is_alphabetic()).map(|c| c.to_ascii_lowercase()).collect();
+    // Letter for letter, each that differs is in a piece; a team read as
+    // another its length ("ch" for "sh") is still one piece.
+    if printed.len() != heard.len() {
+        return None;
+    }
+    let mut wrong = printed.iter().zip(&heard).filter(|((_, p), h)| p != *h).map(|((k, _), _)| *k);
+    let first = wrong.next()?;
+    wrong.all(|k| k == first).then_some(first)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +89,16 @@ mod tests {
         assert_eq!(show("the"), "th·e");
         assert_eq!(show("star"), "s·t·ar");
         assert_eq!(show("green"), "g·r·ee·n");
+    }
+
+    #[test]
+    fn the_sound_read_wrong() {
+        assert_eq!(wrong_piece(&chunks("Bud"), "bad"), Some(1));
+        assert_eq!(wrong_piece(&chunks("ship"), "chip"), Some(0));
+        assert_eq!(wrong_piece(&chunks("hens"), "pens"), Some(0));
+        assert_eq!(wrong_piece(&chunks("kite"), "kit"), None, "a letter fewer");
+        assert_eq!(wrong_piece(&chunks("dig"), "dog"), Some(1));
+        assert_eq!(wrong_piece(&chunks("cat"), "dot"), None, "more than one sound");
+        assert_eq!(wrong_piece(&chunks("cat"), "cat"), None);
     }
 }

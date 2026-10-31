@@ -20,7 +20,7 @@ use sekka_kid_kit::who::{Card, Who, WhoHit};
 use sekka_kid_kit::{Look, instance, stage};
 use sekka_voice::{Kind, Spoken, Voice};
 
-use crate::follow::Page;
+use crate::follow::{Mark, Page};
 use crate::library::{self, Book};
 use crate::listen::{self, Ears, Heard};
 use crate::phonics;
@@ -47,6 +47,14 @@ const PROMPT_MS: i64 = 1_500;
 /// How often Fumi looks again while a kid is reading.
 const LOOK_AGAIN: Duration = Duration::from_millis(250);
 const SOUND_IT_OUT: &str = "Let's sound it out.";
+/// After a reader stops, how long they have to fix a word they misread or
+/// left out themselves, before Fumi asks them to look at it again.
+const PAUSE_TO_FIX: i64 = 1_500;
+/// What Fumi says to practise a word: read wrong, with the one sound that
+/// was wrong shown, or without; or left out.
+const NOT_QUITE_SOUND: &str = "Not quite! Look at this sound, and read the word again.";
+const NOT_QUITE: &str = "Not quite! Look at this word again.";
+const SKIPPED: &str = "You skipped this word. Can you read it?";
 const CONFETTI_MS: i64 = 2600;
 
 const PRAISE: [&str; 6] = [
@@ -70,6 +78,10 @@ pub enum Msg {
     Spoken(Spoken),
     /// Still stuck on word `w` of turn `t` after sounding it out: say it.
     Stuck(u64, usize),
+    /// A pause in turn `t`'s reading: practise a word missed, if one was.
+    Pause(u64),
+    /// The wait for a try at word `w`, practised in turn `t`, is over.
+    Try(u64, usize),
     NewKid(NewKidMsg),
     Gate(GateMsg),
     Grown(GrownMsg),
@@ -119,6 +131,18 @@ struct Session {
     onset: Option<i64>,
     /// Whether anything was heard on this page, read right or not.
     tried: bool,
+    /// Words practised on this page (keys), each once.
+    practised: Vec<String>,
+}
+
+/// A word missed being practised: Fumi has asked the kid to look at it
+/// again, and perhaps said it for them.
+#[derive(Clone, Debug)]
+struct Practice {
+    word: usize,
+    /// The one sound read wrong, among the word's pieces.
+    part: Option<usize>,
+    modelled: bool,
 }
 
 impl Session {
@@ -173,6 +197,7 @@ pub struct Ondoku {
     /// Fumi reading the page aloud: since when, for how long.
     aloud: Option<(i64, f32)>,
     chunks: Option<(usize, Vec<phonics::Chunk>)>,
+    practice: Option<Practice>,
     done: Option<DoneView>,
     done_at: i64,
     pressed: Option<Hit>,
@@ -220,6 +245,7 @@ impl Ondoku {
             say: String::new(),
             aloud: None,
             chunks: None,
+            practice: None,
             done: None,
             done_at: 0,
             pressed: None,
@@ -265,6 +291,11 @@ impl Ondoku {
     /// The word whose sounds are showing.
     pub fn sounding_out(&self) -> Option<usize> {
         self.chunks.as_ref().map(|(w, _)| *w)
+    }
+
+    /// The word missed that's being practised.
+    pub fn practising(&self) -> Option<usize> {
+        self.practice.as_ref().map(|p| p.word)
     }
 
     /// What Fumi is saying.
@@ -456,6 +487,7 @@ impl Ondoku {
             shown: now,
             onset: None,
             tried: false,
+            practised: Vec::new(),
         });
         self.book = Some(book);
         self.go(Screen::Read, cx);
@@ -480,6 +512,7 @@ impl Ondoku {
         s.shown = (self.clock)();
         s.onset = None;
         s.tried = false;
+        s.practised.clear();
         self.progress.at(&book.id, page);
         self.save();
         self.turn += 1;
@@ -487,6 +520,7 @@ impl Ondoku {
         self.hearing = false;
         self.aloud = None;
         self.chunks = None;
+        self.practice = None;
         self.voice.hush();
         if self.mic == Mic::On {
             self.open_ears();
@@ -509,7 +543,8 @@ impl Ondoku {
                 .collect();
             words.dedup();
             // And what Fumi says as it's read, the help first.
-            let lines = std::iter::once(SOUND_IT_OUT).chain(PRAISE).map(String::from);
+            let help = [SOUND_IT_OUT, NOT_QUITE_SOUND, NOT_QUITE, SKIPPED];
+            let lines = help.into_iter().chain(PRAISE).map(String::from);
             self.voice.prepare(lines.chain(words));
         }
     }
@@ -552,6 +587,7 @@ impl Ondoku {
         let Some(text) = self.page_text() else { return };
         self.mic_off();
         self.chunks = None;
+        self.practice = None;
         self.say = "Listen, and follow along with your finger!".into();
         // The page in one line: the voice says when it starts, and for how
         // long, so the words can be lit in time.
@@ -593,6 +629,7 @@ impl Ondoku {
         self.mic_off();
         self.aloud = None;
         self.chunks = None;
+        self.practice = None;
         let Some(mut s) = self.reading.take() else { return };
         s.fold();
         if s.words == 0 && !finished {
@@ -688,6 +725,10 @@ impl Ondoku {
                 self.hearing = on;
                 if !on {
                     self.heard_at = self.now();
+                    // A moment to fix a word missed, then Fumi asks about it.
+                    if self.to_practise().is_some() {
+                        cx.after(Duration::from_millis(PAUSE_TO_FIX as u64), Msg::Pause(turn));
+                    }
                 }
             }
             Heard::Said(turn, t) if turn == self.turn => self.said(&t, cx),
@@ -707,11 +748,32 @@ impl Ondoku {
     /// The reader said `t`: follow them along the page.
     fn said(&mut self, t: &str, cx: &mut Cx<Msg>) {
         let now = self.now();
-        let level = self.reading.as_ref().map_or(1, |s| self.library[s.book].level);
         let Some(s) = self.reading.as_mut() else { return };
-        if !words::heard(t).is_empty() {
+        let heard = words::heard(t);
+        if !heard.is_empty() {
             s.tried = true;
         }
+        if let Some(p) = self.practice.clone() {
+            if heard.is_empty() {
+                return;
+            }
+            let word = &s.current.words[p.word];
+            if heard.iter().any(|h| words::same(&word.key, h)) {
+                let yes = format!("Yes, {}!", plain(&word.text));
+                self.practised(p.word, yes, cx);
+                return;
+            }
+            // Reading on, past it, follows them, and the word stays missed;
+            // anything else was a try at it.
+            let mut on = s.current.clone();
+            if heard.len() < 3 || !on.hear(t, now) {
+                self.model_or_move_on(cx);
+                return;
+            }
+            self.practice = None;
+            self.chunks = None;
+        }
+        let Some(s) = self.reading.as_mut() else { return };
         let was_done = s.current.done();
         if !s.current.hear(t, now) {
             return;
@@ -720,20 +782,110 @@ impl Ondoku {
         self.chunks = None;
         let s = self.reading.as_ref().unwrap();
         if s.current.done() && !was_done {
-            let i = (self.turn as usize + s.page) % PRAISE.len();
-            self.speak(PRAISE[i]);
-            let _ = level;
-            let _ = cx;
+            // A word missed is practised before the page is praised.
+            if let Some(w) = self.to_practise() {
+                self.practise(w, None, cx);
+            } else {
+                let i = (self.turn as usize + s.page) % PRAISE.len();
+                self.speak(PRAISE[i]);
+            }
         } else if !s.current.done() {
             self.say = "I'm listening…".into();
         }
+    }
+
+    /// The first word missed on the page, behind the reader, if help is on:
+    /// not practised yet, and not read right further on.
+    fn to_practise(&self) -> Option<usize> {
+        if !self.progress.help {
+            return None;
+        }
+        let s = self.reading.as_ref()?;
+        let p = &s.current;
+        (0..p.next).find(|&i| {
+            let key = &p.words[i].key;
+            p.marks[i] == Mark::Missed
+                && !s.practised.contains(key)
+                && !(i + 1..p.next).any(|j| p.marks[j] == Mark::Read && p.words[j].key == *key)
+        })
+    }
+
+    /// Ask the kid to look at missed word `w` again: on the first shelves
+    /// with its sounds shown, the one read wrong lit. After `before`, said
+    /// first (praise for the last word practised).
+    fn practise(&mut self, w: usize, before: Option<String>, cx: &mut Cx<Msg>) {
+        let Some(s) = self.reading.as_mut() else { return };
+        let level = self.library[s.book].level;
+        let word = &s.current.words[w];
+        s.practised.push(word.key.clone());
+        let pieces = phonics::chunks(&word.text);
+        let show = level <= 2 && pieces.len() >= 2;
+        let heard_as = s.current.heard_as[w].as_deref();
+        let part = heard_as.and_then(|h| phonics::wrong_piece(&pieces, h)).filter(|_| show);
+        let ask = match (before, heard_as.is_some(), part.is_some()) {
+            (Some(b), ..) => format!("{b} Now look at this one."),
+            (None, true, true) => NOT_QUITE_SOUND.into(),
+            (None, true, false) => NOT_QUITE.into(),
+            (None, false, _) => SKIPPED.into(),
+        };
+        self.chunks = show.then_some((w, pieces));
+        self.practice = Some(Practice { word: w, part, modelled: false });
+        self.speak(ask);
+        // What she'll say next, ready while the kid tries it.
+        let said = plain(&self.reading.as_ref().unwrap().current.words[w].text);
+        self.voice.prepare([
+            format!("It says {said}. Can you say {said}?"),
+            format!("Yes, {said}! You read the whole page!"),
+            format!("Yes, {said}! Keep reading!"),
+        ]);
+        self.fumi_until = self.now() + PROMPT_MS;
+        cx.after(Duration::from_millis((PROMPT_MS + WAIT_FOR_TRY) as u64), Msg::Try(self.turn, w));
+    }
+
+    /// The kid's had a go at the word being practised, or let the time go
+    /// by: Fumi says it, and asks them to say it; if she's said it already,
+    /// it's done.
+    fn model_or_move_on(&mut self, cx: &mut Cx<Msg>) {
+        let Some(p) = self.practice.clone() else { return };
+        let Some(s) = &self.reading else { return };
+        let word = plain(&s.current.words[p.word].text);
+        if p.modelled {
+            self.practised(p.word, format!("That's {word}."), cx);
+            return;
+        }
+        self.practice = Some(Practice { modelled: true, ..p });
+        self.speak(format!("It says {word}. Can you say {word}?"));
+        self.fumi_until = self.now() + PROMPT_MS;
+        cx.after(Duration::from_millis((PROMPT_MS + WAIT_FOR_TRY) as u64), Msg::Try(self.turn, p.word));
+    }
+
+    /// Word `w`'s practice is over: it counts as helped, everywhere it was
+    /// missed on the page. Fumi says `first`, then goes on to the next word
+    /// to practise, or back to reading.
+    fn practised(&mut self, w: usize, first: String, cx: &mut Cx<Msg>) {
+        let now = self.now();
+        let Some(s) = self.reading.as_mut() else { return };
+        let key = s.current.words[w].key.clone();
+        for i in 0..s.current.next {
+            if s.current.marks[i] == Mark::Missed && s.current.words[i].key == key {
+                s.current.help(i, now);
+            }
+        }
+        self.practice = None;
+        self.chunks = None;
+        if let Some(next) = self.to_practise() {
+            self.practise(next, Some(first), cx);
+            return;
+        }
+        let done = self.reading.as_ref().is_some_and(|s| s.current.done());
+        self.speak(if done { format!("{first} You read the whole page!") } else { format!("{first} Keep reading!") });
     }
 
     /// The reader has gone quiet in the middle of a page, having tried it:
     /// help with the next word. In the first books, sound it out first, and
     /// give them the time to try it.
     fn stuck(&mut self, cx: &mut Cx<Msg>) {
-        if !self.progress.help || self.mic != Mic::On || self.hearing {
+        if !self.progress.help || self.mic != Mic::On || self.hearing || self.practice.is_some() {
             return;
         }
         let Some(s) = &self.reading else { return };
@@ -762,7 +914,7 @@ impl Ondoku {
         let now = self.now();
         let Some(s) = self.reading.as_mut() else { return };
         let Some(word) = s.current.words.get(w) else { return };
-        let plain = word.text.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_owned();
+        let plain = plain(&word.text);
         s.current.help(w, now);
         let done = s.current.done();
         self.say = format!("That word is “{plain}”.");
@@ -872,6 +1024,12 @@ impl Ondoku {
                 let Some(word) = s.current.words.get(i) else { return };
                 let pieces = phonics::chunks(&word.text);
                 self.chunks = (level <= 2 && pieces.len() >= 2).then_some((i, pieces));
+                // The word being practised, tapped: Fumi's said it, and the
+                // kid says it back. Any other ends the practice.
+                self.practice = match self.practice.take() {
+                    Some(p) if p.word == i => Some(Practice { modelled: true, ..p }),
+                    _ => None,
+                };
                 self.help_with(i);
             }
             Hit::PageAgain => {
@@ -882,11 +1040,13 @@ impl Ondoku {
                     s.shown = now;
                     s.onset = None;
                     s.tried = false;
+                    s.practised.clear();
                 }
                 self.turn += 1;
                 // What the ears said of the last turn is done with.
                 self.hearing = false;
                 self.chunks = None;
+                self.practice = None;
                 if self.mic == Mic::On {
                     self.open_ears();
                     self.speak("Let's read this page again!");
@@ -1210,6 +1370,7 @@ impl Ondoku {
                 mic: self.mic,
                 aloud: self.aloud_word(now),
                 chunks: self.chunks.clone(),
+                practise: self.practice.as_ref().map(|p| (p.word, p.part)),
                 done: s.current.done(),
                 say: self.say.clone(),
             }
@@ -1242,6 +1403,11 @@ impl Ondoku {
             Screen::Rest => "All done for today".into(),
         }
     }
+}
+
+/// A printed word as Fumi says it: without the punctuation around it.
+fn plain(text: &str) -> String {
+    text.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_owned()
 }
 
 fn stage_event(e: &Event, size: Size, _: &Scene) -> Option<Msg> {
@@ -1392,6 +1558,36 @@ impl Program for Ondoku {
                         cx.after(Duration::from_millis((at - now) as u64), Msg::Stuck(turn, w));
                     } else {
                         self.help_with(w);
+                    }
+                }
+            }
+            Msg::Pause(turn) => {
+                // Quiet since the reading was heard, with no word fixed and
+                // no other help under way: ask about a word missed.
+                let now = self.now();
+                if turn == self.turn
+                    && self.mic == Mic::On
+                    && !self.hearing
+                    && self.practice.is_none()
+                    && self.chunks.is_none()
+                    && now >= self.heard_at + PAUSE_TO_FIX
+                    && let Some(w) = self.to_practise()
+                {
+                    self.practise(w, None, cx);
+                }
+            }
+            Msg::Try(turn, w) => {
+                // As for a word sounded out: once the kid's had time to try
+                // the word being practised and isn't trying it now.
+                if turn == self.turn && self.practice.as_ref().is_some_and(|p| p.word == w) {
+                    let now = self.now();
+                    let at = (self.fumi_until + WAIT_FOR_TRY).max(self.heard_at + WAIT_AFTER_TRY);
+                    if self.hearing {
+                        cx.after(LOOK_AGAIN, Msg::Try(turn, w));
+                    } else if now < at {
+                        cx.after(Duration::from_millis((at - now) as u64), Msg::Try(turn, w));
+                    } else {
+                        self.model_or_move_on(cx);
                     }
                 }
             }

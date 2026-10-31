@@ -122,6 +122,8 @@ pub struct ReadView {
     pub aloud: Option<usize>,
     /// The pieces of a word shown over it: (word, pieces).
     pub chunks: Option<(usize, Vec<Chunk>)>,
+    /// A word missed being practised, and the one piece of it read wrong.
+    pub practise: Option<(usize, Option<usize>)>,
     pub done: bool,
     pub say: String,
 }
@@ -673,7 +675,7 @@ fn word_marks(c: &mut Canvas, b: Rect, laid: &Laid, th: f64, mark: Mark, look: &
 fn read(c: &mut Canvas, s: &Scene, theme: &Theme, look: &Look) {
     let Some(v) = &s.read else { return };
     top_buttons(c, s, look, true);
-    let mood = if v.done {
+    let mood = if v.done && v.practise.is_none() {
         Mood::Cheer
     } else if s.blink {
         Mood::Blink
@@ -694,7 +696,12 @@ fn read(c: &mut Canvas, s: &Scene, theme: &Theme, look: &Look) {
         if listening && i >= v.next && i < v.ahead {
             c.fill(&RoundedRect::from_rect(r, pad * 2.0), look.calm.with_alpha(0.12));
         }
-        if (listening && i == v.next) || v.aloud == Some(i) || v.chunks.as_ref().is_some_and(|(w, _)| *w == i) {
+        if v.practise.is_some_and(|(w, _)| w == i) {
+            c.stroke(&RoundedRect::from_rect(r, pad * 2.0), &StrokeStyle::new(4.0), look.accent);
+        } else if (listening && i == v.next && v.practise.is_none())
+            || v.aloud == Some(i)
+            || v.chunks.as_ref().is_some_and(|(w, _)| *w == i)
+        {
             c.stroke(&RoundedRect::from_rect(r, pad * 2.0), &StrokeStyle::new(3.0), look.calm);
         }
     }
@@ -708,7 +715,8 @@ fn read(c: &mut Canvas, s: &Scene, theme: &Theme, look: &Look) {
     if let Some((i, pieces)) = &v.chunks
         && let Some(b) = laid.boxes.get(*i)
     {
-        sound_it_out(c, theme, word_rect(*b, &laid, th), pieces, look);
+        let wrong = v.practise.and_then(|(w, part)| part.filter(|_| w == *i));
+        sound_it_out(c, theme, word_rect(*b, &laid, th), pieces, wrong, look);
     }
     // The buttons.
     if v.page > 0 {
@@ -741,8 +749,9 @@ fn read(c: &mut Canvas, s: &Scene, theme: &Theme, look: &Look) {
 }
 
 /// A word in the pieces it's sounded out in, on a card over it, in the
-/// page's own type (the letters a reader knows), a silent e faded.
-fn sound_it_out(c: &mut Canvas, theme: &Theme, word: Rect, pieces: &[Chunk], look: &Look) {
+/// page's own type (the letters a reader knows), a silent e faded, and the
+/// piece read wrong, if there was one, lit.
+fn sound_it_out(c: &mut Canvas, theme: &Theme, word: Rect, pieces: &[Chunk], wrong: Option<usize>, look: &Look) {
     let style = |color| art::reading(theme, 44.0, color);
     let width = |s: &str| aizome_kit::sidestep_ui::measure(s, &style(look.ink)).width;
     let th = aizome_kit::sidestep_ui::measure("Ag", &style(look.ink)).height;
@@ -762,7 +771,13 @@ fn sound_it_out(c: &mut Canvas, theme: &Theme, word: Rect, pieces: &[Chunk], loo
             c.draw_label(dot, &style(look.calm), Point::new(x, top));
             x += dot_w;
         }
-        let ink = if p.silent { look.ink_soft.with_alpha(0.5) } else { look.ink };
+        let ink = if wrong == Some(i) {
+            look.accent
+        } else if p.silent {
+            look.ink_soft.with_alpha(0.5)
+        } else {
+            look.ink
+        };
         c.draw_label(&p.text, &style(ink), Point::new(x, top));
         x += pw;
     }

@@ -58,11 +58,17 @@ a grown-up, who listens and signs their reading card. In Ondoku the listener
 is Fumi, a little owl.
 
 - **Read to Fumi.** Press the green button and read the page aloud. Each word
-  lights up as Fumi hears it. A word left out gets dots under it, and going
-  back over words doesn't lose your place.
+  lights up as Fumi hears it. A word left out or read wrong gets dots under
+  it, and going back over words doesn't lose your place.
 - **Help with a word.** Stop on a word and Fumi helps. In the first books she
   shows its sounds first (h·e·n·s) and waits while you try it, then says it
   if you're still stuck. Tap any word to hear it.
+- **Practise a word read wrong.** When you stop, Fumi asks about a word you
+  read wrong or left out, unless you've gone back and fixed it: "Not quite!
+  Look at this word again." In the first books she lights the sound that
+  was wrong ("Bud" read as "bad": the u). Read it right and she cheers;
+  still stuck, and she says it and has you say it back. The page is
+  praised once its words have been practised.
 - **Or listen first.** The blue button has Fumi read the page, lighting each
   word as she says it, so a kid can follow with a finger and then read it
   back.
