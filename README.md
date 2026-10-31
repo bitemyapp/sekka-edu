@@ -58,11 +58,17 @@ a grown-up, who listens and signs their reading card. In Ondoku the listener
 is Fumi, a little owl.
 
 - **Read to Fumi.** Press the green button and read the page aloud. Each word
-  lights up as Fumi hears it. A word left out gets dots under it, and going
-  back over words doesn't lose your place.
+  lights up as Fumi hears it. A word left out or read wrong gets dots under
+  it, and going back over words doesn't lose your place.
 - **Help with a word.** Stop on a word and Fumi helps. In the first books she
-  shows its sounds first (h·e·n·s), then says it if you're still stuck. Tap
-  any word to hear it.
+  shows its sounds first (h·e·n·s) and waits while you try it, then says it
+  if you're still stuck. Tap any word to hear it.
+- **Practise a word read wrong.** When you stop, Fumi asks about a word you
+  read wrong or left out, unless you've gone back and fixed it: "Not quite!
+  Look at this word again." In the first books she lights the sound that
+  was wrong ("Bud" read as "bad": the u). Read it right and she cheers;
+  still stuck, and she says it and has you say it back. The page is
+  praised once its words have been practised.
 - **Or listen first.** The blue button has Fumi read the page, lighting each
   word as she says it, so a kid can follow with a finger and then read it
   back.
@@ -90,9 +96,9 @@ is Fumi, a little owl.
   "a" and "g" the way children write them.
 
 The microphone is on only while the green button is, and it switches itself
-off after 40 seconds of quiet. Fumi listens with Whisper, through Koe,
-Aizome's dictation, on this computer. What she hears is never saved and never
-sent anywhere.
+off after 40 seconds of quiet. Fumi listens with Whisper, the model Koe,
+Aizome's dictation, uses, on this computer. What she hears is never saved
+and never sent anywhere.
 
 ## Sekka Kid profiles and Sekka Kids
 
@@ -135,7 +141,7 @@ leaves the computer.
   children's voices. She may miss words a small child reads. She may also
   take a word that's nearly right as right: she's meant to be generous.
   She's a buddy to practise with, not a reading test. Ondoku needs a
-  microphone, and Whisper's model is 148 MB of the package.
+  microphone, and Whisper's model is 82 MB of the package.
 - **The voice takes room and a moment.** Pon and Fumi speak with Kokoro,
   whose model is 362 MB of the package, and each app uses about half a
   gigabyte of memory with it loaded (Ondoku more while Fumi listens, with

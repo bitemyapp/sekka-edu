@@ -17,6 +17,8 @@ sekka-kid-kit = { path = "crates/sekka-kid-kit" }
 sekka-voice = { path = "crates/sekka-voice" }
 # Koe, Aizome's dictation, as a library: Ondoku listens with it.
 aizome-koe = { path = "../sekka/desktop/aizome/apps/koe" }
+# The whisper.cpp Koe builds, which Ondoku also calls itself (its ears).
+whisper-rs = "0.16"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 libc = "0.2"

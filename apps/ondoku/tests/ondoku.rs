@@ -167,11 +167,14 @@ fn a_tapped_word_is_said_and_a_stuck_reader_is_helped() {
     assert!(text.starts_with("Kim has a big bag."), "{text}");
     r.say("Kim has a big bag");
     assert_eq!(r.h.program().page().unwrap().next, 5);
-    // Quiet on "Kim": its sounds show, then Fumi says it.
+    // Quiet on "Kim": its sounds show, then, given time to try it, Fumi
+    // says it.
     let turn = r.h.program().turn();
     r.h.send(Msg::Heard(Heard::Quiet(turn)));
     assert_eq!(r.h.program().sounding_out(), Some(5));
-    r.h.send(Msg::Stuck(turn, 5));
+    r.wait(4_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5);
+    r.wait(600);
     let page = r.h.program().page().unwrap();
     assert_eq!((page.marks[5], page.next), (Mark::Helped, 6));
     // A word tapped where it's drawn: "fill".
@@ -183,6 +186,125 @@ fn a_tapped_word_is_said_and_a_stuck_reader_is_helped() {
     assert_eq!(page.marks[fill], Mark::Helped);
     assert_eq!(r.h.program().sounding_out(), Some(fill));
     assert!(r.h.program().says().contains("fill"), "{}", r.h.program().says());
+}
+
+/// Sounding a word out, a kid gets time: Fumi doesn't say it while they're
+/// trying, or before she's heard what they tried; a try that's right moves
+/// on without her, and she doesn't go on to the next word by herself.
+#[test]
+fn fumi_waits_while_a_word_is_tried() {
+    let mut r = ondoku("tries", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Tim Can Dig");
+    r.key(NamedKey::Enter);
+    r.key(NamedKey::ArrowRight);
+    r.key(NamedKey::ArrowRight);
+    r.say("Kim has a big bag");
+    let turn = r.h.program().turn();
+    let reading = |r: &mut Run, on: bool| r.h.send(Msg::Heard(Heard::Reading(turn, on)));
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), Some(5));
+    // They start trying after a couple of seconds, slowly...
+    r.wait(2_000);
+    reading(&mut r, true);
+    r.wait(6_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5, "not while they're trying");
+    // ...and get it wrong: Fumi waits for another try.
+    r.say("Kip");
+    reading(&mut r, false);
+    r.wait(2_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5, "a moment for another try");
+    reading(&mut r, true);
+    r.wait(1_500);
+    r.say("Kim");
+    reading(&mut r, false);
+    let page = r.h.program().page().unwrap();
+    assert_eq!((page.marks[5], page.next), (Mark::Read, 6));
+    assert_eq!(r.h.program().sounding_out(), None);
+    r.wait(10_000);
+    assert_eq!(r.h.program().page().unwrap().next, 6);
+}
+
+/// A word read wrong is practised before the page is praised: Fumi asks the
+/// kid to look at it again, its sounds showing and the one read wrong lit,
+/// and says yes when they read it. It counts as helped, everywhere it was
+/// missed on the page.
+#[test]
+fn a_misread_word_is_practised() {
+    let mut r = ondoku("practise", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Bud the Bug");
+    r.key(NamedKey::Enter);
+    r.say("Bad is a bug. Bad has six legs.");
+    let p = r.h.program();
+    assert_eq!(p.practising(), Some(0));
+    assert!(p.says().starts_with("Not quite!"), "{}", p.says());
+    assert_eq!(p.scene().read.unwrap().practise, Some((0, Some(1))), "the u, lit");
+    r.say("Bud");
+    let p = r.h.program();
+    let page = p.page().unwrap();
+    assert_eq!((page.marks[0], page.marks[4]), (Mark::Helped, Mark::Helped));
+    assert_eq!(p.practising(), None);
+    assert!(p.says().starts_with("Yes, Bud!") && p.says().contains("whole page"), "{}", p.says());
+}
+
+/// Missed mid-page, a word is asked about when the reader stops, after a
+/// moment to fix it themselves. Read wrong again, Fumi says it and asks for
+/// it back; with no answer, she goes on, and it counts as helped.
+#[test]
+fn a_word_still_wrong_is_said_for_the_reader() {
+    let mut r = ondoku("practise-wrong", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Bud the Bug");
+    r.key(NamedKey::Enter);
+    let turn = r.h.program().turn();
+    r.say("Bad is a bug");
+    r.h.send(Msg::Heard(Heard::Reading(turn, false)));
+    r.wait(1_000);
+    assert_eq!(r.h.program().practising(), None, "a moment to fix it first");
+    r.wait(600);
+    assert_eq!(r.h.program().practising(), Some(0));
+    r.say("bad");
+    assert!(r.h.program().says().starts_with("It says Bud."), "{}", r.h.program().says());
+    r.wait(6_000);
+    let p = r.h.program();
+    assert_eq!((p.practising(), p.page().unwrap().marks[0]), (None, Mark::Helped));
+    assert!(p.says().contains("Keep reading"), "{}", p.says());
+}
+
+/// A word the reader goes back and fixes in that moment isn't asked about.
+#[test]
+fn a_word_fixed_by_the_reader_isnt_practised() {
+    let mut r = ondoku("practise-fixed", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Tim Can Dig");
+    r.key(NamedKey::Enter);
+    r.key(NamedKey::ArrowRight);
+    r.key(NamedKey::ArrowRight);
+    let turn = r.h.program().turn();
+    r.say("Kim has a bog bag");
+    r.say("big");
+    r.h.send(Msg::Heard(Heard::Reading(turn, false)));
+    r.wait(2_000);
+    let p = r.h.program();
+    assert_eq!((p.practising(), p.page().unwrap().marks[3]), (None, Mark::Read));
+}
+
+/// A first word read wrong is still a try: Fumi helps with it.
+#[test]
+fn a_first_word_misread_is_helped() {
+    let mut r = ondoku("first-word", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Tim Can Dig");
+    r.key(NamedKey::Enter);
+    r.key(NamedKey::ArrowRight);
+    r.key(NamedKey::ArrowRight);
+    let turn = r.h.program().turn();
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), None, "nothing tried yet");
+    r.say("Kip");
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), Some(0));
 }
 
 #[test]
@@ -253,6 +375,12 @@ fn pictures_of_every_screen() {
             r.say("Ten red");
             let turn = r.h.program().turn();
             r.h.send(Msg::Heard(Heard::Quiet(turn)));
+        });
+        picture("practise", theme, &[HANA], |r| {
+            r.key(NamedKey::Enter);
+            r.open("Bud the Bug");
+            r.key(NamedKey::Enter);
+            r.say("Bad is a bug. Bad has six legs.");
         });
         picture("long-page", theme, &[SORA], |r| {
             r.key(NamedKey::Enter);

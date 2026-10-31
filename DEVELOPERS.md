@@ -13,7 +13,7 @@
 | `docs/ideas.md` | Ideas for what else to make. |
 | `nix/package.nix`, `flake.nix` | The package, built against Aizome's kit from a pinned Sekka. |
 | `nix/kokoro.nix` | Kokoro's model, as sherpa-onnx packs it. |
-| `nix/whisper-base-en.nix` | The Whisper model Ondoku listens with, pinned as Koe pins it. |
+| `nix/whisper-base-en.nix` | The Whisper model Ondoku listens with: base.en quantized to 8 bits, at the revision Koe pins. |
 | `tools/voice-check` | Compare voices by what Whisper hears of them. |
 | `scripts/wx` | Build and test on wx-workstation. |
 
@@ -89,13 +89,23 @@ The tests:
     short vowels taught so far, or is one of the listed sight words.
 - `apps/ondoku/tests/ondoku.rs`, with pretended ears (what's heard is sent
   in): a first reader, a whole book read to Fumi and its log, a word tapped
-  where it's drawn, help when stuck, the day ending at a page, every page of
-  every book fitting on the paper in its level's type, and pictures.
+  where it's drawn, help when stuck, Fumi waiting while a word is tried
+  (not while the kid is reading, not before she's heard their try, and not
+  moving on to the next word by herself), a first word misread still
+  helped, a word misread practised before the page is praised (its wrong
+  sound lit), one still wrong said for the reader, one fixed by the reader
+  left alone, the day ending at a page, every page of every book fitting
+  on the paper in its level's type, and pictures.
 - `apps/ondoku/tests/ears.rs` (`--ignored`, needs Kokoro, sherpa-onnx and a
-  Whisper model): real listening through Koe, with Kokoro reading a page to
-  a pretend `pw-record`. Whisper hears it in stretches cut at the pauses, and
-  the page is followed to its end. A word read wrongly ("red" for "tan") is
-  marked, not taken as read.
+  Whisper model): real listening, with Kokoro reading a page to a pretend
+  `pw-record` at a microphone's pace. Whisper hears it in stretches cut at
+  the pauses, each soon after its sentence ends, and the page is followed
+  to its end. A word read wrongly ("red" for "tan") is marked, not taken as
+  read. Over a fan's hum (louder than Koe's speech threshold by itself) the
+  pauses are still found.
+- `apps/ondoku/tests/hearing.rs` (`--ignored`, the same needs): how fast and
+  how well Whisper hears stretches of reading, asked different ways (see
+  "Hearing faster"). Run it with `--nocapture` on the computer that matters.
 
 The pictures in `tests/golden` are drawn at scale 1 with Aizome's fonts.
 `AIZOME_UPDATE_GOLDENS=1` redraws them; look at them before committing.
@@ -204,7 +214,8 @@ whole-window changes aren't yet.
 | `library` | The books: their file format, the shelves (levels 1 to 4 for kindergarten, 1st, 2nd–3rd and 4th–5th grade), and splitting pages too long for their level's type. `build.rs` bundles every file under `library/`. |
 | `words` | Words as printed (punctuation kept for drawing) and as said: a key that's lower case, without punctuation, numbers in words, and sound-alikes (there, their) taken as the same. |
 | `follow` | A page being read: what Whisper heard lined up with the words still to read, the words read, helped with and missed, and how far a guess mid-sentence has the reader. |
-| `listen` | Fumi's ears: the microphone through `pw-record`, Whisper through Koe, stretches of reading cut at pauses, guesses while a stretch goes on, "stuck" after a quiet, and a mute while Fumi talks. |
+| `listen` | Fumi's ears: the microphone through `pw-record`, the room's own sound told from speech, stretches of reading cut at pauses, Whisper on a thread of its own (started at the first of a quiet, guessing while a stretch goes on), "stuck" after a quiet, and a mute while Fumi talks. |
+| `whisper` | Whisper, the whisper.cpp Koe builds, told how long each stretch is so it hears only that much. |
 | `phonics` | A word in the pieces it's sounded out in (sh, ee, igh, a silent e), for the first books. |
 | `progress` | What Ondoku keeps for each kid: bookmarks, times through each book, words a minute, the grown-ups' choices. |
 | `scene`, `art` | The screens as one canvas in the 1000 × 700 design: the shelves, covers, a page laid out word by word (so each can be lit and tapped), Fumi, the microphone's rings. |
@@ -212,26 +223,51 @@ whole-window changes aren't yet.
 
 **Koe as a library.** Ondoku depends on `aizome-koe` by path and uses its
 library:
-- `koe::engine::Recognizer`: Whisper through whisper.cpp, the model kept
-  loaded, `with_prompt` per page.
 - `koe::audio`'s `PcmDecoder`, `rms` and `has_signal`: PipeWire's raw
   samples, loudness, and the gate that keeps silence from Whisper.
 - `koe::models`: Koe's pinned catalogue and the folder its downloads go to.
+- Koe's whisper.cpp, through the same `whisper-rs` (a workspace dependency
+  at Koe's version, so Cargo builds it once).
+
+Ondoku calls Whisper itself (`whisper.rs`) rather than through
+`koe::engine::Recognizer`, which it used at first. Koe's recognizer hears
+every utterance as Whisper's whole window, 30 seconds with the rest silent,
+so a word read on its own cost as much as a page. Ondoku sets whisper.cpp's
+`audio_ctx` to the stretch's length and a margin. Giving Koe the same
+option would let Ondoku go back to Koe's recognizer, and would speed up
+Koe's own dictation of short phrases.
 
 The model is `SEKKA_EDU_WHISPER`, which the package sets to Whisper base.en
-(`nix/whisper-base-en.nix`, Koe's own pin), or else one Koe has downloaded,
-English ones first. Ondoku doesn't use Koe's session service: it records for
-itself, and only while the green button is on.
+quantized to 8 bits (`nix/whisper-base-en.nix`, at Koe's pinned revision),
+or else one Koe has downloaded, English ones first. Ondoku doesn't use
+Koe's session service: it records for itself, and only while the green
+button is on.
 
 **Listening.**
 - The ears run on a thread of their own with a small Tokio runtime. They
   record 16 kHz mono and cut a stretch at a 0.7 s pause, or at 12 s. Each
   stretch goes to Whisper, prompted with "A child reading aloud." and the
-  page's words, Koe's way of hinting vocabulary.
-- While a stretch goes on, a guess is made at it every second, so the page
-  can show how far the reader has got.
-- Four seconds of quiet after reading has begun is "stuck". Forty switch the
-  microphone off.
+  page's words, Koe's way of hinting vocabulary. The prompt is cut to fit
+  half of Whisper's text context, as Koe allows.
+- Whisper has a thread of its own, taking jobs in order, so the microphone
+  is never kept waiting. At 0.3 s of quiet it starts on the stretch so far.
+  If the quiet reaches 0.7 s, that's what was said, and it's usually ready
+  by then. If the reader goes on, that job is cancelled (whisper.cpp's abort
+  callback).
+- Whisper hears a stretch of 3 s or more in a window fitted to it, and a
+  shorter one (a word tried again) in its whole window, greedily, without
+  a warmer second try. A transcript that loops is cut to its first time
+  round. See "Hearing faster".
+- While a stretch goes on, a guess is made at it every half second, so the
+  page can show how far the reader has got. A new stretch, or Whisper's
+  start at a quiet, cancels a guess under way.
+- Speech is Koe's threshold (RMS 0.008), or twice the room's own sound if
+  that's louder. The room's sound is the quietest moment of the last ten
+  seconds, so a fan's hum neither counts as reading nor keeps a stretch
+  from ending.
+- The ears tell the app when a stretch starts and when everything read has
+  been heard (`Heard::Reading`). Four seconds of quiet after the last
+  stretch was heard is "stuck". Forty switch the microphone off.
 - Whenever Fumi speaks, the voice says for how long (`sekka-voice`'s
   `on_speaking`), and the ears hear nothing for that time, so her voice
   isn't taken for the reader's.
@@ -242,8 +278,46 @@ heard costs 1, a different word heard in its place costs 1, and a heard
 word not on the page costs 0.6, so repeats and "um"s are cheap. The page
 moves on to just after the last printed word heard. A word left out or
 misread before it is marked missed; a misread last word isn't passed.
-Words match as printed, sounding the same, with or without a final s, or
+Heard words before any ahead are the reader going back. A missed word
+among them, within as many words back as they went and two more, is
+counted as read: a self-correction, which running records count as
+reading the word. Words match as printed, sounding the same, with or without a final s, or
 (five letters and up) one letter off. Fumi is generous on purpose.
+
+**Help.** When a reader who has tried the page (anything heard, right or
+not) goes quiet, Fumi helps with the next word. On the first two shelves
+she says "Let's sound it out" and shows the word's sounds, then waits:
+- not while the kid is reading, or before what they read has been heard;
+- 3 s after she's finished talking, for a first try;
+- 2.5 s after a try that wasn't the word, for another.
+
+Then she says the word, and it counts as helped. A try that's right moves
+the page on without her. She doesn't go on to the next word by herself;
+the next help comes after the reader's next quiet. On the higher shelves
+she says the word at the quiet.
+
+**Practice.** A word misread or left out is practised, in the way reading
+tutors call pause, prompt, praise:
+- **Pause.** When the reader stops for 1.5 s after reading, or at the end
+  of the page, a word missed behind them that they haven't fixed is asked
+  about. A word they fixed (going back over it), or read right further on
+  the page, isn't. With help switched off, nothing is.
+- **Prompt.** "Not quite! Look at this word again" for a word misread,
+  "You skipped this word" for one left out. The word is outlined, and on
+  the first two shelves its sounds show over it. When one sound is all
+  that was wrong, as "bad" for "Bud", that sound is lit: "Look at this
+  sound, and read the word again". `phonics::wrong_piece` finds it from
+  what was heard in its place (`Page::heard_as`).
+- **Praise.** "Yes, Bud!", then the next word missed, or back to reading,
+  or "You read the whole page!"
+- A try that's still wrong, or none in the time she waits for one (as for
+  a word sounded out): "It says Bud. Can you say Bud?" Wrong again, or
+  nothing: "That's Bud", and Fumi goes on.
+
+A word practised counts as helped, everywhere it was missed on the page.
+The page isn't praised until its missed words have been practised.
+Reading on instead (three words or more that follow the page) leaves the
+word missed, and Fumi follows. Each word is asked about once a page.
 
 **The library.** `library/<shelf>/<id>.txt`: `key: value` lines (`title`,
 `author`, `year`, `source`, `level`, `skills`, `cover`, `about`), a blank
@@ -286,6 +360,60 @@ won't match.
 
 Sekka Kids shows rounds that practise `fluency` in words, not questions.
 The day's allowance ends reading at a page turn, with the next page kept.
+
+## Hearing faster
+
+`apps/ondoku/tests/hearing.rs` compares ways of asking Whisper to hear, on
+stretches like the ears cut. Kokoro reads sentences from each shelf, words
+on their own (a kid trying one again), a word misread, and words one by
+one, in three voices at two paces: 102 stretches, 393 s of reading. These
+are from the X1 Carbon (Core Ultra 7 365, four fast cores and four small),
+whisper.cpp built for AVX2 as `scripts/wx` builds it, four threads, Whisper
+base.en, quantized to 8 bits (q8_0) where it says:
+
+| Way | Mean | Under 2 s | p90 | Longest | Words read | Words alone | Misreads caught |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Whole window, warmer retries (Koe's way) | 1617 ms | 1361 ms | 2437 ms | 2766 ms | 98.2% | 33/36 | 6/6 |
+| Whole window, no retries | 1441 ms | 1357 ms | 1652 ms | 1679 ms | 99.5% | 33/36 | 6/6 |
+| Fitted window, no retries | 338 ms | 207 ms | 607 ms | 831 ms | 98.1% | 23/36 | 6/6 |
+| q8_0, whole window, no retries | 896 ms | 844 ms | 1029 ms | 1046 ms | 99.4% | 32/36 | 6/6 |
+| q8_0, fitted window, no retries | 192 ms | 106 ms | 380 ms | 501 ms | 98.1% | 23/36 | 6/6 |
+| **q8_0, Ondoku's way** (fitted, whole under 3 s) | **646 ms** | **861 ms** | **882 ms** | **907 ms** | **99.1%** | **32/36** | **6/6** |
+
+- **Warmer retries were most of the time, and all of the long waits.**
+  whisper.cpp decodes again at a higher temperature when it's unsure, up
+  to five times. In a fitted window it's often unsure: one stretch took
+  5.2 s.
+- **Without them, Whisper can go round in circles** on a short stretch:
+  "dig dig dig…", or "Sam has a cat Sam has a cat…", one stretch in eight.
+  A cap of 8 tokens a second of sound stops it, and `whisper::unloop`
+  keeps the first time round.
+- **A window fitted to a sentence**, with 2.6 s over, hears it as well as
+  the whole window in a quarter of the time. A margin of 1.3 s, or none,
+  lost words (93–96% read).
+- **A word on its own in a fitted window can come out as another**:
+  "hens" as "pens" or "hands", "ship" as "Shaper", "rain" as "brain". A
+  window of 10, 15 or 20 s at the least got 26 of 36 words right; only the
+  whole window got 32 or 33. So a stretch under 3 s, a word or two, gets
+  the whole window: it's a kid trying a word again, and getting it right
+  must count.
+- **q8_0 took half the time, as accurately**, and is 82 MB to base.en's
+  148 MB. tiny.en was quicker still but took 2 of 6 misread words as read.
+- **Threads:** two took 1.7 times as long as four. Six were no quicker,
+  with a longer tail. Eight, on eight cores, spun waiting on the small cores
+  until the run was stopped.
+
+So a sentence is heard in a fifth to a third of a second, and a word tried
+again in under 0.9 s, where Koe's way took 1.4 s and sometimes 2.8 s. With
+Whisper starting at the first 0.3 s of quiet, a sentence's words are
+usually ready when the 0.7 s pause ends. A word tried again is ready
+about 1.2 s after it's said.
+
+End to end (`tests/ears.rs`, on wx-workstation), each sentence is heard
+0.4 to 1 s after it ends.
+
+The Nix package builds whisper.cpp for any x86-64, without AVX2 but with
+OpenBLAS, as Sekka's Koe package does. It hasn't been timed this way.
 
 ## The voice
 
