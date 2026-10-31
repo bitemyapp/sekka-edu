@@ -6,7 +6,7 @@
 | --- | --- |
 | `crates/sekka-kid` | Sekka Kid profiles: the store, the activity log, the time tracker and reports. No UI; no kit. |
 | `crates/sekka-kid-kit` | What apps share on screen, on Aizome's kit: the kids' look and stage, animal avatars, "Who's playing?", the new-player form, the grown-ups' door, the report view, and one-instance launching (Soroban's). |
-| `crates/sekka-voice` | The voice apps speak with: Kokoro-82M through sherpa-onnx, or espeak-ng. Speaks on its own thread, keeps what it has said, makes lines ahead. No kit. |
+| `crates/sekka-voice` | The voice apps speak with: Kokoro-82M through sherpa-onnx, or espeak-ng. Speaks on its own thread, keeps what it has said, makes lines ahead, and says words from pronunciation hints. No kit. |
 | `apps/anzan` | Anzan, the mental abacus (`sekka-anzan`). |
 | `apps/ondoku` | Ondoku, the reading buddy (`sekka-ondoku`), and its books (`library/`). |
 | `apps/kids` | Sekka Kids, profiles and reports for grown-ups (`sekka-kids`). |
@@ -67,8 +67,12 @@ there, or build with `--locked`.
 
 The tests:
 
-- `sekka-kid`: profiles, concurrent adds, a log with unreadable lines, the
-  tracker's stretches of play, and a report across days, apps and skills.
+- `sekka-kid`: profiles (with how a name sounds), concurrent adds, a log
+  with unreadable lines, the tracker's stretches of play, and a report
+  across days, apps and skills.
+- `sekka-voice`: the latest line winning and lines made between, a line
+  made as its hints say it, the oldest lines going first, and the hints
+  themselves (shown, said, brackets that aren't hints, names).
 - Anzan's units: the abacus, the soroban methods for every sum to 99 (direct,
   little friends, big friends, both), every lesson's questions across seeds,
   rounds, hints, peeks, flashes, progress and unlocking, and the sounds.
@@ -77,18 +81,20 @@ The tests:
   where they're drawn, its log and progress, the daily allowance and the
   grown-ups' door, keys, peeks, and pictures of every screen by Day and Night.
 - `apps/kids/tests/kids.rs`: a report across two apps, the door before
-  changes, a daily limit reaching the report, reading rounds counted in
-  words, removing a kid, and pictures.
+  changes, a daily limit and how a name sounds reaching the card, reading
+  rounds counted in words, removing a kid, and pictures.
 - Ondoku's units:
   - printed and heard words (punctuation, numbers, words that sound the
     same);
-  - following a page (skips, misreadings, going back, guesses, help);
-  - phonics chunks, the book format and pagination;
+  - following a page (skips, misreadings, going back, guesses, help, a
+    word read as its hint says);
+  - phonics chunks, the book format, hints and pagination;
   - every bundled book reading;
   - a check that every word of the first books can be sounded out with the
     short vowels taught so far, or is one of the listed sight words.
 - `apps/ondoku/tests/ondoku.rs`, with pretended ears (what's heard is sent
-  in): a first reader, a whole book read to Fumi and its log, a word tapped
+  in): a first reader, a name said as it sounds and shown as written, a
+  whole book read to Fumi and its log, a word tapped
   where it's drawn, help when stuck, Fumi waiting while a word is tried
   (not while the kid is reading, not before she's heard their try, and not
   moving on to the next word by herself), a first word misread still
@@ -146,6 +152,9 @@ stretch. A minute without input ends it, ten seconds after the last input.
 `flush` writes what has been played so far, so a crash loses at most the time
 since the last flush. Anzan flushes every 30 seconds and whenever the screen
 changes.
+
+`Profile::sounds_like` is the kid's name spelt how it sounds, for the
+apps' voices (see "Pronunciation hints"); older profiles have none.
 
 `Profile::daily_minutes` is the day's allowance across the catalogue.
 `Store::played_today` adds the kid's `active` time for the local day from
@@ -468,3 +477,52 @@ what it needs.
 `cargo test -p sekka-voice --test kokoro -- --ignored`, with both
 variables set, speaks three lines through the binding. It writes them
 under the target's temporary folder to listen to or transcribe.
+
+### Pronunciation hints
+
+Kokoro doesn't choose a word's sounds itself. With `lang` set to `en-us`,
+sherpa-onnx hands each line to espeak-ng (with the `espeak-ng-data` in the
+model's folder) and gives Kokoro the sounds that come back. The lexicon in
+that folder is only used for Chinese. espeak-ng mostly says a word one way
+wherever it is, so "You read that so well!" comes out as "reed", and it
+says "Fumi" as "FYOO-mee". espeak-ng, the fallback voice, reads by the
+same rules. So a hint is a spelling espeak-ng reads right, and it works
+for both voices.
+
+- **In a line**, `[read](red)` is shown as "read" and said as "red"
+  (`hints::shown`, `hints::said`). The voice keeps a line under what it
+  says, so a changed hint makes the line again.
+- **Everywhere**: `hints::WORDS` are respelt wherever they're written:
+  Fumi, tanuki, hooray ("HOR-ay" otherwise), soroban and anzan.
+- **Fumi's lines**: her past-tense "You read…" lines carry `[read](red)`.
+  `speak` shows a line without its hints.
+- **Kids' names**: `Profile::sounds_like`, set in Sekka Kids' card sheet
+  ("Say it as", with a button to hear it). Both apps greet a kid as
+  `[name](sounds like)`. Sekka Kids loads the voice the first time the
+  button is pressed, and keeps it while it's open.
+- **Ondoku's books**: a hint in the text where espeak-ng says a word wrong
+  in its sentence, mostly a word read two ways: "live" in "you really live
+  by the river", "a low bow", "an old sow", "what the row was about",
+  "close their eyes", "used to", and Kipling's "Best Beloved". espeak-ng
+  gets some from the words around them ("she had read" is "red"), and
+  those have no hint. A hint is one word, said as one word, so
+  `Book::pages` (as shown) and `Book::voiced` (as written) have the same
+  words, and pagination splits them alike. Reading a word as its hint
+  says it counts as reading it ("bough" for that "bow").
+
+To find words said wrong, every line both apps say, and every sentence in
+the books with a word that's read two ways, was put through espeak-ng with
+Kokoro's data on 2026-10-31. Each hint was checked the same way, and the
+first few also through sherpa-onnx's own front end (its debug output
+lists the sounds Kokoro is given). That's a check of the sounds Kokoro is
+given, not of a person listening. How Kokoro says a line can be checked
+without listening:
+
+```
+espeak-ng -q --ipa -v en-us --path=$SEKKA_EDU_KOKORO "You red that so well!"
+```
+
+`cargo test -p sekka-voice --test hints -- --ignored` checks `WORDS` that
+way, and `cargo test -p sekka-ondoku --test hints -- --ignored` checks
+that each hint in the books changes how its words are said (both need
+espeak-ng on `PATH` and `SEKKA_EDU_KOKORO`).

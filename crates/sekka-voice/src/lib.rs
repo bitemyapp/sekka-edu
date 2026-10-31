@@ -4,13 +4,15 @@
 //! one thing at a time, the latest cutting in. What it has said is kept
 //! as WAV files under `$XDG_CACHE_HOME/sekka-edu/voice`, so a line is made
 //! only once; between lines it makes the ones an app expects to need
-//! ([`Voice::prepare`]), so they start at once.
+//! ([`Voice::prepare`]), so they start at once. A word it would say wrong
+//! is said from a hint ([`hints`]): `[read](red)` in a line says "red".
 //!
 //! Where Kokoro is:
 //! - `SEKKA_EDU_KOKORO`: the model's folder (`nix/kokoro.nix`).
 //! - `SEKKA_EDU_SHERPA_ONNX`: `libsherpa-onnx-c-api.so`, else the library
 //!   search path's.
 
+pub mod hints;
 pub mod kokoro;
 mod wav;
 
@@ -275,10 +277,12 @@ impl Voice {
     }
 }
 
-/// The file `text` is in, made now if it wasn't already.
+/// The file `text` is in, said with its hints ([`hints::said`]), made now
+/// if it wasn't already.
 fn made(engine: &mut dyn Engine, dir: &Path, text: &str) -> Option<PathBuf> {
-    let file = file_for(dir, text);
-    if file.exists() || engine.make(text, &file) { Some(file) } else { None }
+    let said = hints::said(text);
+    let file = file_for(dir, &said);
+    if file.exists() || engine.make(&said, &file) { Some(file) } else { None }
 }
 
 /// How long a WAV file of ours plays.
@@ -427,6 +431,26 @@ mod tests {
         std::thread::sleep(Duration::from_millis(150));
         assert_eq!(asked.lock().unwrap().len(), 3);
         assert!(file_for(&dir, "Now make nine.").exists());
+        drop(tx);
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn a_line_is_made_as_its_hints_say_it_and_told_as_asked() {
+        let dir = scratch("hints");
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let told = Arc::new(Mutex::new(Vec::new()));
+        let (tx, rx) = channel();
+        let t = told.clone();
+        tx.send(Ask::Tell(Box::new(move |s: Spoken| t.lock().unwrap().push(s.text)))).unwrap();
+        tx.send(Ask::Say("You [read](red) it, Fumi!".into())).unwrap();
+        let (a, d) = (asked.clone(), dir.clone());
+        let player = (PathBuf::from("/bin/sh"), vec!["-c", "exit 0"]);
+        let t = std::thread::spawn(move || speaker(rx, &mut Fake(a), &player, &d));
+        assert!(until(|| !told.lock().unwrap().is_empty()));
+        assert_eq!(*asked.lock().unwrap(), ["You red it, Foomee!"]);
+        assert_eq!(*told.lock().unwrap(), ["You [read](red) it, Fumi!"]);
+        assert!(file_for(&dir, "You red it, Foomee!").exists(), "kept as it was said");
         drop(tx);
         t.join().unwrap();
     }

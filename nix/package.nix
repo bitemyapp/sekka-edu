@@ -98,7 +98,16 @@ rustPlatform.buildRustPackage {
       } \
       --prefix LD_LIBRARY_PATH : ${libraryPath} \
       --set-default AIZOME_FONT_DIR ${fonts}
+    # Sekka Kids speaks only to let a grown-up hear how a name is said.
     wrapProgram $out/bin/sekka-kids \
+      --set-default SEKKA_EDU_KOKORO ${kokoro} \
+      --set-default SEKKA_EDU_SHERPA_ONNX ${sherpa-onnx}/lib/libsherpa-onnx-c-api.so \
+      --suffix PATH : ${
+        lib.makeBinPath [
+          pipewire
+          espeak-ng
+        ]
+      } \
       --prefix LD_LIBRARY_PATH : ${libraryPath} \
       --set-default AIZOME_FONT_DIR ${fonts}
   '';

@@ -72,6 +72,10 @@ is Fumi, a little owl.
 - **Or listen first.** The blue button has Fumi read the page, lighting each
   word as she says it, so a kid can follow with a finger and then read it
   back.
+- **Words said the way the story means them.** Where the voice would get a
+  word wrong, the book tells Fumi how to say it: "live" in "you really live
+  by the river", "a low bow", "an old sow". She says "You read that so
+  well!" as "red", too.
 - **Four shelves, kindergarten to 5th grade**, each opening at a kid's grade:
   - *First books*: six little books, one for each short vowel in the order
     phonics is taught (cat, dig, fox, pup, hen) and one mixing them. Every
@@ -116,7 +120,9 @@ app, days played and sittings, rounds finished, how often answers are right
 the first time, when they usually play, and how each skill is coming along.
 For reading, it shows words read alone, words Fumi helped with, and words a
 minute, a common measure of how smoothly a child reads. It also edits the
-kid's card and sets **daily time across every Sekka Edu app**. When time
+kid's card, including **how to say their name**: spell it how it sounds
+("Ree-ah" for Ria) and press Hear it to check, and Pon and Fumi say it
+that way. And it sets **daily time across every Sekka Edu app**. When time
 runs out, an app lets the round or page in progress finish, then says
 goodnight. A grown-up can give ten more minutes.
 
@@ -149,6 +155,9 @@ leaves the computer.
   to make the first time (the apps make lines they expect to need while the
   kid listens), and is kept after that. Built without Kokoro, they speak
   with espeak-ng, which is robotic and harder to follow.
+- **The voice can still say a word wrong**, most likely a name or an odd
+  word in an old book. The words that are fixed were found by checking the
+  sounds the voice is given, not by listening to every page.
 
 ## Trying it
 

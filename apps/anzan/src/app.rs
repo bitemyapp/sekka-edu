@@ -25,7 +25,7 @@ use crate::progress::Progress;
 use crate::round::{self, Feedback, Hint, Phase, Round, words};
 use crate::scene::{self, Beads, Hit, PlayStage, PlayView, Scene, Screen, Stop, SummaryView};
 use crate::sound::{Sound, Sounds};
-use sekka_voice::{Kind, Voice};
+use sekka_voice::{Kind, Voice, hints};
 
 pub const APP_ID: &str = "computer.sekka.Anzan";
 
@@ -45,6 +45,12 @@ const FLUSH_EVERY: Duration = Duration::from_secs(30);
 const TYPING_MS: i64 = 1200;
 
 const PRAISE: [&str; 6] = ["Yes!", "Great!", "You got it!", "Super!", "Hooray!", "Nice!"];
+
+/// A kid's name as Pon says it: as a grown-up spelt how it sounds, if
+/// they did.
+fn said_name(kid: &Profile) -> String {
+    hints::hint(&kid.name, kid.sounds_like.as_deref().unwrap_or_default())
+}
 
 /// What Pon says to ask `q` (peeks and flashes say more as they go).
 fn ask(q: &Question) -> String {
@@ -226,7 +232,7 @@ impl Anzan {
 
     fn reload_kids(&mut self) {
         self.kids = self.store.profiles();
-        self.voice.prepare(self.kids.iter().map(|k| format!("Hi, {}!", k.name)));
+        self.voice.prepare(self.kids.iter().map(|k| format!("Hi, {}!", said_name(k))));
         self.who_focus = self.who_focus.min(self.kids.len());
     }
 
@@ -238,7 +244,7 @@ impl Anzan {
         self.voice.on = self.progress.voice;
         self.tracker = Some(Tracker::new(self.store.clone(), &kid.id, APP_ID));
         self.focus = self.progress.here(kid.grade);
-        self.voice.say(format!("Hi, {}!", kid.name));
+        self.voice.say(format!("Hi, {}!", said_name(&kid)));
         self.kid = Some(kid);
         self.touch();
         if self.out_of_time() {

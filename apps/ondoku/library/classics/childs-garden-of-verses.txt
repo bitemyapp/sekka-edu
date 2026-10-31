@@ -103,7 +103,7 @@ All love to be out by the light of the moon.
 
 But all of the things that belong to the day
 Cuddle to sleep to be out of her way;
-And flowers and children close their eyes
+And flowers and children [close](cloze) their eyes
 Till up in the morning the sun shall arise.
 
 ===

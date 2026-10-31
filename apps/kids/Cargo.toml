@@ -19,5 +19,6 @@ path = "src/main.rs"
 aizome-kit.workspace = true
 sekka-kid.workspace = true
 sekka-kid-kit.workspace = true
+sekka-voice.workspace = true
 log.workspace = true
 env_logger.workspace = true

@@ -13,6 +13,7 @@ use sekka_kid::{Animal, Grade, KidColor, Profile, Report, Store, clock, report};
 use sekka_kid_kit::gate::{self, Gate, GateMsg};
 use sekka_kid_kit::newkid::{self, NewKid, NewKidMsg};
 use sekka_kid_kit::{Look, instance, report_view};
+use sekka_voice::{Voice, hints};
 
 pub const APP_ID: &str = "computer.sekka.Kids";
 
@@ -41,6 +42,8 @@ pub enum Msg {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Form {
     pub name: String,
+    /// The name spelt how it sounds, for the apps' voices.
+    pub sounds_like: String,
     pub animal: Animal,
     pub color: KidColor,
     pub grade: Grade,
@@ -51,6 +54,9 @@ pub struct Form {
 #[derive(Clone, Debug, PartialEq)]
 pub enum FormMsg {
     Name(String),
+    SoundsLike(String),
+    /// Say hello to the kid, as the apps will.
+    Hear,
     Animal(usize),
     Color(usize),
     Grade(usize),
@@ -91,6 +97,11 @@ pub struct Kids {
     seed: u64,
     /// Night (the theme the view can't ask for).
     dark: bool,
+    /// The apps' voice, to hear a name: loaded the first time it's asked
+    /// for.
+    voice: Option<Voice>,
+    /// Never make a sound (tests).
+    pub quiet: bool,
 }
 
 impl Kids {
@@ -108,6 +119,8 @@ impl Kids {
             unlocked: false,
             seed: clock::now_ms() as u64,
             dark: true,
+            voice: None,
+            quiet: false,
         }
     }
 
@@ -157,6 +170,7 @@ impl Kids {
                 let Some(k) = self.kid() else { return };
                 let form = Form {
                     name: k.name.clone(),
+                    sounds_like: k.sounds_like.clone().unwrap_or_default(),
                     animal: k.animal,
                     color: k.color,
                     grade: k.grade,
@@ -185,6 +199,12 @@ impl Kids {
         let Some((_, Sheet::Form(f))) = self.sheet.as_mut() else { return };
         match m {
             FormMsg::Name(n) => f.name = n,
+            FormMsg::SoundsLike(s) => f.sounds_like = s,
+            FormMsg::Hear => {
+                let line = format!("Hi, {}!", hints::hint(f.name.trim(), &f.sounds_like));
+                let quiet = self.quiet;
+                self.voice.get_or_insert_with(|| Voice::new(true, quiet)).say(line);
+            }
             FormMsg::Animal(i) => f.animal = Animal::ALL[i.min(Animal::ALL.len() - 1)],
             FormMsg::Color(i) => f.color = KidColor::ALL[i.min(KidColor::ALL.len() - 1)],
             FormMsg::Grade(i) => f.grade = Grade::ALL[i.min(Grade::ALL.len() - 1)],
@@ -196,6 +216,7 @@ impl Kids {
                 if let Some(k) = self.kid().cloned() {
                     let p = Profile {
                         name: f.name.clone(),
+                        sounds_like: sekka_kid::NewProfile::clean_sound(Some(&f.sounds_like)),
                         animal: f.animal,
                         color: f.color,
                         grade: f.grade,
@@ -223,6 +244,21 @@ impl Kids {
                 "Card",
                 vec![
                     form_row("Name", text_field(&f.name).on_change(move |n| m(FormMsg::Name(n))).width(220.0)).into(),
+                    form_row(
+                        "Say it as",
+                        row![
+                            text_field(&f.sounds_like)
+                                .placeholder(f.name.trim())
+                                .on_change(move |s| m(FormMsg::SoundsLike(s)))
+                                .width(150.0),
+                            button("Hear it").on_press(m(FormMsg::Hear)),
+                        ]
+                        .spacing(8.0)
+                    )
+                    .description(
+                        "Their name spelt how it sounds, for Pon and Fumi: “Ree-ah” for Ria. Left empty, they say it as it's written."
+                    )
+                    .into(),
                     form_row(
                         "Animal",
                         dropdown(Animal::ALL.map(|a| a.name()), Animal::ALL.iter().position(|a| *a == f.animal))

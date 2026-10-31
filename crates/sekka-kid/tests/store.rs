@@ -53,6 +53,13 @@ fn profiles_are_added_changed_and_removed() {
     store.update(&changed).unwrap();
     assert_eq!(store.profile(&a.id).unwrap().daily_minutes, Some(20));
     assert_eq!(store.profile(&a.id).unwrap().animal, Animal::Owl);
+    assert_eq!(a.sounds_like, None);
+    changed.sounds_like = Some("  Hah-nah ".into());
+    store.update(&changed).unwrap();
+    assert_eq!(store.profile(&a.id).unwrap().sounds_like.as_deref(), Some("Hah-nah"), "trimmed");
+    changed.sounds_like = Some(" ".into());
+    store.update(&changed).unwrap();
+    assert_eq!(store.profile(&a.id).unwrap().sounds_like, None, "nothing, none");
 
     assert!(
         store

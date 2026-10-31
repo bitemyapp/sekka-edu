@@ -132,6 +132,10 @@ pub struct Profile {
     /// Stable, never shown: the folder of their log.
     pub id: String,
     pub name: String,
+    /// Their name spelt how it sounds ("Ree-ah"), for the apps' voices,
+    /// when it isn't said the way it's written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sounds_like: Option<String>,
     pub animal: Animal,
     pub color: KidColor,
     pub grade: Grade,
@@ -155,5 +159,11 @@ impl NewProfile {
     /// The name as it will be kept: trimmed, at most 24 characters.
     pub fn clean_name(name: &str) -> String {
         name.trim().chars().take(24).collect()
+    }
+
+    /// How the name sounds, as it will be kept: trimmed, at most 40
+    /// characters, and none if that leaves nothing.
+    pub fn clean_sound(sound: Option<&str>) -> Option<String> {
+        sound.map(|s| s.trim().chars().take(40).collect::<String>()).filter(|s| !s.is_empty())
     }
 }
