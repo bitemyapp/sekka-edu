@@ -67,7 +67,9 @@ The tests:
   where they're drawn, its log and progress, the daily allowance and the
   grown-ups' door, keys, peeks, and pictures of every screen by Day and Night.
 - `apps/kids/tests/kids.rs`: a report across two apps, the door before
-  changes, a daily limit reaching the report, removing a kid, and pictures.
+  changes, a daily limit reaching the report, removing a kid, and pictures:
+  each period (Week, Two weeks, Month) with a month of play, the smallest
+  window, the door and the card.
 
 The pictures in `tests/golden` are drawn at scale 1 with Aizome's fonts.
 `AIZOME_UPDATE_GOLDENS=1` redraws them; look at them before committing.
