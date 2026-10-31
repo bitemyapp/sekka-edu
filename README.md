@@ -79,7 +79,8 @@ leaves the computer.
 - **Profiles belong to one Linux account.** Kids sharing a login pick their
   card at the start; separate accounts each have their own kids.
 - **So far it has run only in headless tests.** It hasn't been tried in a
-  live session or by children yet, and there's no Sekka catalogue entry yet.
+  live session or by children yet, its Nix package hasn't been built yet, and
+  there's no Sekka catalogue entry.
 - **English only**, written for kindergarten and first grade. Pon's voice
   uses espeak-ng, which is clear but robotic.
 
