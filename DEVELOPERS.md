@@ -6,10 +6,12 @@
 | --- | --- |
 | `crates/sekka-kid` | Sekka Kid profiles: the store, the activity log, the time tracker and reports. No UI; no kit. |
 | `crates/sekka-kid-kit` | What apps share on screen, on Aizome's kit: the kids' look and stage, animal avatars, "Who's playing?", the new-player form, the grown-ups' door, the report view, and one-instance launching (Soroban's). |
+| `crates/sekka-voice` | The voice apps speak with: Kokoro-82M through sherpa-onnx, or espeak-ng. Speaks on its own thread, keeps what it has said, makes lines ahead. No kit. |
 | `apps/anzan` | Anzan, the mental abacus (`sekka-anzan`). |
 | `apps/kids` | Sekka Kids, profiles and reports for grown-ups (`sekka-kids`). |
 | `docs/ideas.md` | Ideas for what else to make. |
 | `nix/package.nix`, `flake.nix` | The package, built against Aizome's kit from a pinned Sekka. |
+| `nix/kokoro.nix` | Kokoro's model, as sherpa-onnx packs it. |
 | `scripts/wx` | Build and test on wx-workstation. |
 
 ## The kit comes from Sekka
@@ -139,7 +141,7 @@ every app. An app adds its own unflushed time with `Tracker::unwritten`.
 | `progress` | What Anzan keeps for each kid: stars, introductions heard, peek length, sound and voice, extra time today. |
 | `scene` | The screens as one canvas, laid out in a 1000 × 700 design scaled to the window: what's drawn, hit-testing, painting. |
 | `art` | The soroban, beads with faces, Pon's bubble, ten-frames, lanterns, stars, the curtain, confetti. |
-| `sound` | Sounds synthesised once to WAV and played with `pw-play`, `paplay` or `aplay`; Pon's voice through `espeak-ng`. Both stay silent without the programs. |
+| `sound` | Sounds synthesised once to WAV and played with `pw-play`, `paplay` or `aplay`; silent without them. Pon's voice is `sekka-voice`. |
 | `app` | The program: screens, input, the beads' slides and cheers, timers, the tracker, the allowance and the grown-ups' sheet. |
 
 Frames tick every 20 ms, but only while something moves: a slide, a cheer, a
@@ -167,3 +169,57 @@ wx-workstation (load average 11 to 20, shared) on 2026-10-31:
 A blink redraws the awake beads' rods and Pon, about 5 ms every 3.7 s.
 Aizome's budget is 4 ms from an event to its frame: slides are inside it,
 whole-window changes aren't yet.
+
+## The voice
+
+`sekka-voice` speaks with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
+v1.0 (Apache-2.0) as `af_heart` (speaker 3 of sherpa-onnx's
+`kokoro-multi-lang-v1_0`), a little slower than its own pace. It runs on
+the processor through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)'s
+C API. The library is loaded with `dlopen` when the voice starts rather
+than linked, so a build needs neither it nor the model.
+
+- `SEKKA_EDU_KOKORO` names the model's folder, which is `nix/kokoro.nix`'s
+  output. `SEKKA_EDU_SHERPA_ONNX` names `libsherpa-onnx-c-api.so`, which
+  is otherwise looked up on the library path. The package's wrapper sets
+  both.
+- `kokoro.rs` mirrors sherpa-onnx 1.13's structures. Another version
+  isn't used. Each structure goes over with zeroed room after it, for the
+  fields sherpa-onnx adds at the end. If Kokoro can't load, the voice
+  speaks with espeak-ng, and Anzan's grown-ups' sheet says which voice
+  is speaking.
+- Lines are made on the voice's own thread, at a lower priority than the
+  app, on two threads of onnxruntime's. They're kept as WAV files under
+  `$XDG_CACHE_HOME/sekka-edu/voice/<engine>` (the newest 4000). `say` cuts
+  in. `prepare` queues lines to make while nothing is being said: Anzan
+  prepares a round's introduction, questions, praise and ending when the
+  round starts, the kids' greetings, and 0 to 100 for free play. Praise
+  runs through a fixed order from a place set when the round starts, so
+  it can be made ahead.
+
+Why Kokoro: as of 2026, it leads small voices that run on a processor
+for quality. To check what it does for Pon, every line Anzan says (its
+lesson introductions, prompts, praise, hints and numbers: 56 lines, 340
+words) was spoken by espeak-ng with Anzan's former settings
+(`en-us+f3`, 135 words a minute) and by Kokoro, and Whisper `base.en`
+(whisper.cpp 1.9.5) wrote down what it heard. On wx-workstation, on
+2026-10-31:
+
+| Voice | Words Whisper got wrong | Lines heard exactly |
+| --- | --- | --- |
+| espeak-ng | 88 of 340 (26%) | 15 of 56 |
+| Kokoro `af_heart` | 8 of 340 (2.4%) | 50 of 56 |
+
+espeak-ng's errors included "Each little bead is one" heard as
+"B.T.L.B. is one", "Show me seven" as "Show me someone", and "fifteen" as
+"50". Most of Kokoro's were spelling, such as "10's" for "tens". Its one
+mistaken word was "bead" heard as "beat", a word espeak-ng also got wrong.
+Kokoro made a line in a quarter to a third of the time the line lasts,
+on two threads.
+
+`tools/voice-check/run.sh FOLDER` repeats the comparison. Its header lists
+what it needs.
+
+`cargo test -p sekka-voice --test kokoro -- --ignored`, with both
+variables set, speaks three lines through the binding. It writes them
+under the target's temporary folder to listen to or transcribe.

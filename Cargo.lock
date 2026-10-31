@@ -1191,6 +1191,7 @@ dependencies = [
  "log",
  "sekka-kid",
  "sekka-kid-kit",
+ "sekka-voice",
  "serde",
  "serde_json",
 ]
@@ -1223,6 +1224,14 @@ dependencies = [
  "log",
  "sekka-kid",
  "sekka-kid-kit",
+]
+
+[[package]]
+name = "sekka-voice"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
 ]
 
 [[package]]

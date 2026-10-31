@@ -43,8 +43,11 @@
           src = pkgs.lib.cleanSource ./.;
           aizome = aizomeFor pkgs;
           fonts = fontsFor pkgs;
+          inherit kokoro;
         };
         default = sekka-edu;
+        # The voice Sekka Edu's apps speak with.
+        kokoro = pkgs.callPackage ./nix/kokoro.nix { };
       });
 
       apps = each (
