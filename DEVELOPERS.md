@@ -78,7 +78,8 @@ The tests:
   grown-ups' door, keys, peeks, and pictures of every screen by Day and Night.
 - `apps/kids/tests/kids.rs`: a report across two apps, the door before
   changes, a daily limit reaching the report, reading rounds counted in
-  words, removing a kid, and pictures.
+  words, removing a kid, and pictures: each period (Week, Two weeks, Month)
+  with a month of play, the smallest window, the door and the card.
 - Ondoku's units:
   - printed and heard words (punctuation, numbers, words that sound the
     same);

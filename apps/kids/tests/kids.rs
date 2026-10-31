@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use aizome_kit::Appearance;
+use aizome_kit::layout::{Point, Size, Vec2};
 use aizome_kit::testing::{Harness, assert_golden};
 use aizome_kit::theme::ThemeChoice;
 use sekka_kid::{Animal, AppEntry, Event, Grade, KidColor, NewProfile, Round, Store, clock};
@@ -194,5 +195,62 @@ fn reading_rounds_count_words() {
     let texts = h.texts(h.window());
     for want in ["60 of 65 words alone · 42 a minute", "Reading aloud", "Short o (fox, hop)", "Ondoku"] {
         assert!(texts.iter().any(|t| t.contains(want)), "{want} in {texts:?}");
+/// Three more weeks of Hana's play before this one, some days off, over
+/// both apps: enough for the longer periods to fill their charts.
+fn a_month_before(s: &Store) {
+    let hana = s.profiles().into_iter().find(|k| k.name == "Hana").unwrap();
+    let now = afternoon();
+    let day = 86_400_000;
+    let anzan = "computer.sekka.Anzan";
+    for d in 7..30 {
+        if d % 3 == 1 {
+            continue;
+        }
+        let mins = 6 + (d * 7) % 19;
+        let app = if d % 4 == 0 { "computer.sekka.Sangaku" } else { anzan };
+        let from = now - d * day - 40 * 60_000;
+        s.append(&hana.id, &Event::Active { app: app.into(), from, to: from + mins * 60_000 }).unwrap();
+        if app == anzan {
+            let ft = 3 + (d % 5) as u32;
+            s.append(&hana.id, &round(anzan, "Big friends", "big-friends", from + 10 * 60_000, ft, true)).unwrap();
+        }
+    }
+}
+
+#[test]
+fn pictures_of_longer_periods_and_a_narrow_window() {
+    for theme in [ThemeChoice::Day, ThemeChoice::Night] {
+        let (mut h, s) = kids(&format!("periods-{theme:?}"), theme);
+        a_month_before(&s);
+        let w = h.window();
+        let suffix = if theme == ThemeChoice::Day { "day" } else { "night" };
+        for (period, name) in [(1, "two-weeks"), (2, "month")] {
+            h.send(Msg::Period(period));
+            assert_golden(&mut h, w, format!("tests/golden/report-{name}-{suffix}.png"), 1.0);
+        }
+        // The smallest the window goes, a month in it.
+        h.resize(w, Size::new(720.0, 480.0));
+        assert_golden(&mut h, w, format!("tests/golden/report-narrow-{suffix}.png"), 1.0);
+        // Down to the chart: every other date fits there.
+        h.scroll(w, Point::new(500.0, 300.0), Vec2::new(0.0, 220.0));
+        assert_golden(&mut h, w, format!("tests/golden/report-narrow-chart-{suffix}.png"), 1.0);
+    }
+}
+
+#[test]
+fn pictures_of_the_door_and_the_card() {
+    for theme in [ThemeChoice::Day, ThemeChoice::Night] {
+        let (mut h, _) = kids(&format!("sheets-{theme:?}"), theme);
+        let w = h.window();
+        let suffix = if theme == ThemeChoice::Day { "day" } else { "night" };
+        h.send(Msg::Edit);
+        assert_golden(&mut h, w, format!("tests/golden/door-{suffix}.png"), 1.0);
+        let q = h.texts(w).into_iter().find(|t| t.starts_with("What is ")).unwrap();
+        let n: Vec<u32> =
+            q.trim_start_matches("What is ").trim_end_matches('?').split(" × ").map(|x| x.parse().unwrap()).collect();
+        h.send(Msg::Gate(GateMsg::Answer((n[0] * n[1]).to_string())));
+        h.send(Msg::Gate(GateMsg::Submit));
+        h.send(Msg::Form(FormMsg::Limit(true)));
+        assert_golden(&mut h, w, format!("tests/golden/card-{suffix}.png"), 1.0);
     }
 }
