@@ -84,10 +84,11 @@ leaves the computer.
   children yet, and there's no Sekka catalogue entry.
 - **English only**, written for kindergarten and first grade.
 - **Pon's voice takes room and a moment.** Kokoro's model is 362 MB of the
-  package. A line Pon hasn't said before takes a moment to make the first
-  time (Anzan makes a round's lines while the kid listens), and is kept
-  after that. Built without Kokoro, Pon speaks with espeak-ng, which is
-  robotic and harder to follow.
+  package, and Anzan uses about half a gigabyte of memory with it loaded.
+  A line Pon hasn't said before takes a moment to make the first time
+  (Anzan makes a round's lines while the kid listens), and is kept after
+  that. Built without Kokoro, Pon speaks with espeak-ng, which is robotic
+  and harder to follow.
 
 ## Trying it
 
