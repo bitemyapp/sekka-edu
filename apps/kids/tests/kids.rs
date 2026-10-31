@@ -195,6 +195,9 @@ fn reading_rounds_count_words() {
     let texts = h.texts(h.window());
     for want in ["60 of 65 words alone · 42 a minute", "Reading aloud", "Short o (fox, hop)", "Ondoku"] {
         assert!(texts.iter().any(|t| t.contains(want)), "{want} in {texts:?}");
+    }
+}
+
 /// Three more weeks of Hana's play before this one, some days off, over
 /// both apps: enough for the longer periods to fill their charts.
 fn a_month_before(s: &Store) {
