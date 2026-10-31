@@ -170,10 +170,20 @@ pub fn prune(dir: &Path, keep: usize) {
     }
 }
 
+/// A line starting to play: what's said and how long it lasts.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Spoken {
+    pub text: String,
+    pub seconds: f32,
+}
+
+type Hearer = Box<dyn Fn(Spoken) + Send>;
+
 enum Ask {
     Say(String),
     Hush,
     Prepare(Vec<String>),
+    Tell(Hearer),
 }
 
 /// A voice: Kokoro, espeak-ng, or none, speaking on its own thread.
@@ -246,6 +256,14 @@ impl Voice {
         }
     }
 
+    /// Have `f` told each time a line starts to play (to show its words as
+    /// they're said, or to stop listening while the voice talks).
+    pub fn on_speaking(&self, f: impl Fn(Spoken) + Send + 'static) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Ask::Tell(Box::new(f)));
+        }
+    }
+
     /// Make these lines ready while nothing's being said, so they start at
     /// once when they're wanted.
     pub fn prepare<S: Into<String>>(&self, lines: impl IntoIterator<Item = S>) {
@@ -261,6 +279,16 @@ impl Voice {
 fn made(engine: &mut dyn Engine, dir: &Path, text: &str) -> Option<PathBuf> {
     let file = file_for(dir, text);
     if file.exists() || engine.make(text, &file) { Some(file) } else { None }
+}
+
+/// How long a WAV file of ours plays.
+pub fn seconds(file: &Path) -> f32 {
+    let Ok(bytes) = std::fs::read(file) else { return 0.0 };
+    if bytes.len() < 44 {
+        return 0.0;
+    }
+    let rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]).max(1);
+    (bytes.len() - 44) as f32 / 2.0 / rate as f32
 }
 
 fn start(player: &(PathBuf, Vec<&'static str>), file: &Path) -> Option<Child> {
@@ -286,6 +314,7 @@ fn stop(playing: &mut Option<Child>) {
 fn speaker(rx: Receiver<Ask>, engine: &mut dyn Engine, player: &(PathBuf, Vec<&'static str>), dir: &Path) {
     let mut playing: Option<Child> = None;
     let mut ahead: VecDeque<String> = VecDeque::new();
+    let mut hearer: Option<Hearer> = None;
     loop {
         // Idle: wait. Speaking: look in now and then to reap it. Lines to
         // make: only look.
@@ -308,6 +337,7 @@ fn speaker(rx: Receiver<Ask>, engine: &mut dyn Engine, player: &(PathBuf, Vec<&'
                 Ask::Say(t) => say = Some(t),
                 Ask::Hush => say = Some(String::new()),
                 Ask::Prepare(lines) => ahead.extend(lines),
+                Ask::Tell(f) => hearer = Some(f),
             }
         }
         if let Some(text) = say {
@@ -317,6 +347,11 @@ fn speaker(rx: Receiver<Ask>, engine: &mut dyn Engine, player: &(PathBuf, Vec<&'
                 && let Some(file) = made(engine, dir, &text)
             {
                 playing = start(player, &file);
+                if playing.is_some()
+                    && let Some(h) = &hearer
+                {
+                    h(Spoken { seconds: seconds(&file), text });
+                }
             }
             continue;
         }

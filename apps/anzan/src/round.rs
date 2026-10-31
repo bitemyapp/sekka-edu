@@ -461,6 +461,7 @@ impl Round {
             stars: if self.is_done() { self.stars() } else { 0 },
             finished: self.is_done(),
             response_ms: self.response_ms(),
+            words_per_minute: None,
         }
     }
 }

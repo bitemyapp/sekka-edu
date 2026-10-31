@@ -33,6 +33,7 @@ fn round(app: &str, ended: i64, items: u32, first_try: u32, finished: bool, skil
         stars: 2,
         finished,
         response_ms: Some(2_000),
+        words_per_minute: None,
     })
 }
 

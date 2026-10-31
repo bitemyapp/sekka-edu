@@ -1,0 +1,19 @@
+title: Frog's Snack
+level: 2
+skills: blends, fluency, expression
+cover: frog, #2f8f5b
+about: Frog is hungry, but every bug is too quick for him. Then he tries a trick.
+
+Frog sat on a flat rock in the pond. His tummy went grumble, grumble.
+===
+"I must get a snack," said Frog.
+===
+A fly went past. Frog jumped. Splash! The fly was too quick.
+===
+A black bug went past. Frog jumped. Splash! The bug was too quick.
+===
+Frog swam back to his rock. He did not jump. He did not blink. He sat still.
+===
+A moth flew past. Frog did not jump. Snap! Frog got his snack.
+===
+"Still is the best trick," said Frog. And then he had a nap in the sun.

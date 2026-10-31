@@ -29,6 +29,22 @@ pub fn skill_name(id: &str) -> String {
         "big-friends" => "Big friends (pairs that make 10)".into(),
         "place-value" => "Tens and ones".into(),
         "mental-abacus" => "Mental abacus".into(),
+        "short-a" => "Short a (cat, map)".into(),
+        "short-i" => "Short i (pig, dig)".into(),
+        "short-o" => "Short o (fox, hop)".into(),
+        "short-u" => "Short u (bug, sun)".into(),
+        "short-e" => "Short e (hen, red)".into(),
+        "sight-words" => "Sight words (the, said)".into(),
+        "digraphs" => "Letter pairs (ship, chip, that)".into(),
+        "blends" => "Blends (frog, snap)".into(),
+        "magic-e" => "Silent e (kite, ride)".into(),
+        "vowel-teams" => "Vowel teams (rain, seed)".into(),
+        "r-controlled" => "Vowels with r (star, bird)".into(),
+        "fluency" => "Reading aloud".into(),
+        "expression" => "Reading with expression".into(),
+        "rhyme" => "Rhyme".into(),
+        "poetry" => "Poems".into(),
+        "vocabulary" => "Vocabulary".into(),
         other => {
             let s = other.replace('-', " ");
             let mut c = s.chars();
@@ -263,10 +279,21 @@ pub fn view<M: Clone + Send + 'static>(r: &Report) -> Element<M> {
         .map(|round| {
             let d = clock::day_of(round.ended);
             let when = format!("{} {} · {}", d.weekday_name(), d.day, clock::time_of(round.ended));
-            let how = if round.finished {
-                format!("{} of {} first time {}", round.first_try, round.items, stars(round.stars))
-            } else {
-                format!("left after {} questions", round.items)
+            // Reading (rounds that practise fluency) counts words, not questions.
+            let reading = round.skills.iter().any(|s| s == "fluency");
+            let how = match (reading, round.finished) {
+                (true, finished) => {
+                    let mut s = format!("{} of {} words alone", round.first_try, round.items);
+                    if let Some(w) = round.words_per_minute {
+                        s.push_str(&format!(" · {w} a minute"));
+                    }
+                    if !finished {
+                        s.push_str(" · not finished");
+                    }
+                    s
+                }
+                (false, true) => format!("{} of {} first time {}", round.first_try, round.items, stars(round.stars)),
+                (false, false) => format!("left after {} questions", round.items),
             };
             row![
                 text(when).role(Role::Text3).mono().size(12.0).width(120.0),

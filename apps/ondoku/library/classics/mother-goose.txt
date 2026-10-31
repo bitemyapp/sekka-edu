@@ -1,0 +1,97 @@
+title: Mother Goose Rhymes
+author: Traditional
+year: 1916
+source: Project Gutenberg eBook #10607
+level: 1
+skills: fluency, rhyme
+cover: music, #c2452d
+about: Ten nursery rhymes to say out loud, from Humpty Dumpty to the cow that jumped over the moon.
+
+Humpty Dumpty sat on a wall,
+Humpty Dumpty had a great fall;
+All the King's horses, and all the King's men
+Cannot put Humpty Dumpty together again.
+
+===
+
+Jack and Jill went up the hill,
+To fetch a pail of water;
+Jack fell down, and broke his crown,
+And Jill came tumbling after.
+
+===
+
+Then up Jack got and off did trot,
+As fast as he could caper,
+To old Dame Dob, who patched his nob
+With vinegar and brown paper.
+
+===
+
+Hey, diddle, diddle!
+The cat and the fiddle,
+The cow jumped over the moon;
+The little dog laughed
+To see such sport,
+And the dish ran away with the spoon.
+
+===
+
+Hickory, dickory, dock!
+The mouse ran up the clock;
+The clock struck one,
+And down he run,
+Hickory, dickory, dock!
+
+===
+
+Baa, baa, black sheep,
+Have you any wool?
+Yes, marry, have I,
+Three bags full;
+
+One for my master,
+One for my dame,
+But none for the little boy
+Who cries in the lane.
+
+===
+
+Little Miss Muffet
+Sat on a tuffet,
+Eating of curds and whey;
+There came a big spider,
+And sat down beside her,
+And frightened Miss Muffet away.
+
+===
+
+Jack be nimble, Jack be quick,
+Jack jump over the candlestick.
+
+===
+
+Rain, rain, go away,
+Come again another day;
+Little Johnny wants to play.
+
+===
+
+Mary, Mary, quite contrary,
+How does your garden grow?
+Silver bells and cockle-shells,
+And pretty maids all of a row.
+
+===
+
+"Pussy-cat, pussy-cat,
+Where have you been?"
+"I've been to London
+To look at the Queen."
+
+===
+
+"Pussy-cat, pussy-cat,
+What did you there?"
+"I frightened a little mouse
+Under the chair."

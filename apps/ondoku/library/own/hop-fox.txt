@@ -1,0 +1,23 @@
+title: Hop, Fox!
+level: 1
+skills: short-o, sight-words, fluency
+cover: fox, #d9772b
+about: Fox finds a pot and thinks it is a hat. Is it?
+
+Fox can hop.
+===
+Hop, hop, hop! Fox hops to a log.
+===
+Fox sits on top of the log.
+===
+Fox has a pot and a mop.
+===
+"Is it a hat?" said Fox.
+===
+Fox has the pot on top. It is not a hat!
+===
+Fox can not see. Bonk!
+===
+"It is a pot," said Fox. "A pot is not a hat."
+===
+Fox and the pot hop off.

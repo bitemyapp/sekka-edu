@@ -1,0 +1,21 @@
+title: Sam and the Cat
+level: 1
+skills: short-a, sight-words, fluency
+cover: cat, #e8553d
+about: Sam has a cat, a bag and a hat. But where is the cat?
+
+Sam has a cat.
+===
+The cat is fat and tan.
+===
+Sam has a hat. Sam has a bag.
+===
+Where is the cat?
+===
+Is the cat at the van? No!
+===
+Is the cat at the bag? No!
+===
+Look at the hat. The hat can wag!
+===
+The hat has a cat! Sam and the cat nap.

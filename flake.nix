@@ -24,9 +24,12 @@
           a=${sekka}/desktop/aizome
           mkdir -p $out/crates $out/sukumo
           cp $a/Cargo.toml $out/
-          for c in aizome-kit aizome-theme aizome-config aizome-shell-proto; do
+          for c in aizome-kit aizome-theme aizome-config aizome-shell-proto aizome-ipc; do
             cp -r $a/crates/$c $out/crates/
           done
+          # Koe, which Ondoku listens with.
+          mkdir -p $out/apps
+          cp -r $a/apps/koe $out/apps/
           cp $a/sukumo/Cargo.toml $out/sukumo/
           cp -r $a/sukumo/crates $out/sukumo/
         '';
@@ -44,10 +47,13 @@
           aizome = aizomeFor pkgs;
           fonts = fontsFor pkgs;
           inherit kokoro;
+          whisper = whisper-base-en;
         };
         default = sekka-edu;
         # The voice Sekka Edu's apps speak with.
         kokoro = pkgs.callPackage ./nix/kokoro.nix { };
+        # What Fumi listens with in Ondoku.
+        whisper-base-en = pkgs.callPackage ./nix/whisper-base-en.nix { };
       });
 
       apps = each (
@@ -65,6 +71,10 @@
             type = "app";
             program = "${p}/bin/sekka-kids";
           };
+          ondoku = {
+            type = "app";
+            program = "${p}/bin/sekka-ondoku";
+          };
         }
       );
 
@@ -80,7 +90,7 @@
           ...
         }:
         {
-          options.programs.sekka-edu.enable = lib.mkEnableOption "Sekka Edu: Anzan and Sekka Kids";
+          options.programs.sekka-edu.enable = lib.mkEnableOption "Sekka Edu: Anzan, Ondoku and Sekka Kids";
           config = lib.mkIf config.programs.sekka-edu.enable {
             environment.systemPackages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.sekka-edu ];
           };

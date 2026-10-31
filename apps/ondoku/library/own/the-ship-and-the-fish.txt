@@ -1,0 +1,19 @@
+title: The Ship and the Fish
+level: 2
+skills: digraphs, fluency, expression
+cover: bell, #3f6aab
+about: Chip and Beth are on a ship when something big swims past.
+
+Chip and Beth sit on a ship. The ship has a bell. Ding, ding, ding!
+===
+"What is that?" said Chip. "Is it a fish?"
+===
+It is a big fish with a long tail. It can swish and splash.
+===
+The fish jumps up. Then it dips back down with a big splash!
+===
+"Look at that fish!" said Beth. "I wish I had a fish."
+===
+"That fish is not a pet," said Chip. "It must swim in the sea."
+===
+Chip and Beth wave to the fish. The fish swims off. Swish, swish!

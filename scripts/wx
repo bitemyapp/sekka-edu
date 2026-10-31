@@ -23,9 +23,12 @@ sync() {
   rsync -rlpD --checksum "$a/Cargo.toml" "$host:$remote/sekka/desktop/aizome/"
   rsync -rlpD --checksum "$a/sukumo/Cargo.toml" "$host:$remote/sekka/desktop/aizome/sukumo/"
   rsync -rlpD --checksum --delete "$a/sukumo/crates/" "$host:$remote/sekka/desktop/aizome/sukumo/crates/"
-  for c in aizome-kit aizome-theme aizome-config aizome-shell-proto; do
+  for c in aizome-kit aizome-theme aizome-config aizome-shell-proto aizome-ipc; do
     rsync -rlpD --checksum --delete --exclude target "$a/crates/$c/" "$host:$remote/sekka/desktop/aizome/crates/$c/"
   done
+  # Koe, which Ondoku listens with.
+  ssh "$host" "mkdir -p ~/$remote/sekka/desktop/aizome/apps"
+  rsync -rlpD --checksum --delete --exclude target "$a/apps/koe/" "$host:$remote/sekka/desktop/aizome/apps/koe/"
 }
 
 shell() {
@@ -40,6 +43,10 @@ shell() {
     # Aizome's type, for pictures drawn as the session draws them.
     if [ ! -e fonts ]; then
       $nix build 'github:bitemyapp/sekka/$rev#aizome-fonts' --out-link fonts
+    fi
+    # Andika, which Ondoku sets its pages in.
+    if [ ! -e andika ]; then
+      $nix build --inputs-from 'github:bitemyapp/sekka/$rev' nixpkgs#andika --out-link andika
     fi
     echo ok"
 }
@@ -57,6 +64,10 @@ source ./env.sh
 cd sekka-edu
 export CARGO_TARGET_DIR=/dev/shm/sekka-edu-target CARGO_PROFILE_DEV_DEBUG=0
 export AIZOME_FONT_DIR=\${AIZOME_FONT_DIR:-\$HOME/$remote/fonts}
+export SEKKA_EDU_READING_FONT=\${SEKKA_EDU_READING_FONT:-\$HOME/$remote/andika/share/fonts/truetype/Andika-Regular.ttf}
+# whisper.cpp (Koe's, for Ondoku) for any x86-64 with AVX2, not just this
+# Zen 5: binaries built here run on the laptop.
+export GGML_NATIVE=OFF GGML_AVX=ON GGML_AVX2=ON GGML_FMA=ON GGML_F16C=ON
 # wx's /bin/sh is dash, which drops the hyphenated variables a #!/bin/sh
 # rustc wrapper must pass on: run the dev shell's wrapper with bash.
 if [ -n "\${RUSTC_WRAPPER:-}" ]; then

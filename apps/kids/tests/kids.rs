@@ -37,6 +37,7 @@ fn round(app: &str, title: &str, skill: &str, ended: i64, first_try: u32, finish
         stars: if first_try >= 7 { 3 } else { 2 },
         finished,
         response_ms: Some(2_400),
+        words_per_minute: None,
     })
 }
 
@@ -154,5 +155,44 @@ fn a_picture_of_a_report() {
         let w = h.window();
         let suffix = if theme == ThemeChoice::Day { "day" } else { "night" };
         assert_golden(&mut h, w, format!("tests/golden/report-{suffix}.png"), 1.0);
+    }
+}
+
+#[test]
+fn reading_rounds_count_words() {
+    let s = store("reading");
+    let hana = s.profiles().into_iter().find(|k| k.name == "Hana").unwrap();
+    s.register_app(&AppEntry {
+        id: "computer.sekka.Ondoku".into(),
+        name: "Ondoku".into(),
+        blurb: "A reading buddy who listens".into(),
+    })
+    .unwrap();
+    let ended = afternoon() - 60 * 60_000;
+    s.append(
+        &hana.id,
+        &Event::Round(Round {
+            app: "computer.sekka.Ondoku".into(),
+            activity: "hop-fox".into(),
+            title: "Hop, Fox!".into(),
+            skills: vec!["short-o".into(), "fluency".into()],
+            started: ended - 180_000,
+            ended,
+            items: 65,
+            first_try: 60,
+            hints: 3,
+            stars: 1,
+            finished: true,
+            response_ms: None,
+            words_per_minute: Some(42),
+        }),
+    )
+    .unwrap();
+    let mut app = Kids::new(s.clone());
+    app.clock = Rc::new(afternoon);
+    let h = Harness::with(app, Appearance::default(), false);
+    let texts = h.texts(h.window());
+    for want in ["60 of 65 words alone · 42 a minute", "Reading aloud", "Short o (fox, hop)", "Ondoku"] {
+        assert!(texts.iter().any(|t| t.contains(want)), "{want} in {texts:?}");
     }
 }

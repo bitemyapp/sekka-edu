@@ -1,0 +1,21 @@
+title: Bear's Bike Ride
+level: 2
+skills: magic-e, fluency, expression
+cover: bear, #8a5a3c
+about: Bear rides his bike to the lake, and Mole has a kite.
+
+Bear has a bike. It is red and white.
+===
+"I like to ride my bike," said Bear. "I will ride to the lake."
+===
+Bear rides up the hill. It is a long ride. Bear has to take a rest.
+===
+Bear rides down the hill. Whee! The wind is on his face.
+===
+At the lake, Bear sees Mole. Mole has a kite.
+===
+"Can I ride home with you?" said Mole. "Yes," said Bear. "Hop on!"
+===
+Bear and Mole ride home. Mole holds the kite, and it flies up in the wind!
+===
+"What a fine ride," said Bear. "What a fine kite," said Mole.

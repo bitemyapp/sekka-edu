@@ -1,0 +1,21 @@
+title: Gus the Pup
+level: 1
+skills: short-u, sight-words, fluency
+cover: sun, #e7a522
+about: Gus the pup digs in the mud. Will he get a bath?
+
+Gus is a pup.
+===
+Gus can run. Gus can dig.
+===
+Gus digs in the mud. Mud, mud, mud!
+===
+Gus runs in. Gus has mud on his back.
+===
+Gus runs on the rug. Mom is not glad.
+===
+"Hop in the tub, Gus!" said Mom.
+===
+Rub, rub, rub. Lots of suds!
+===
+Gus naps in the sun. What fun!
