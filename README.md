@@ -22,7 +22,8 @@ kids move the beads in their heads. That's anzan, mental calculation.
   a whole hand.
 - **Pon the tanuki asks the questions.** He shows each number big, with a
   ten-frame of dots for kids who don't read numerals yet, and reads every
-  question aloud.
+  question aloud in a warm, natural voice (Kokoro, which runs on this
+  computer: nothing is sent anywhere).
 - **Sixteen lessons along a lantern path**, in five chapters:
   - *Wake the beads*: ones, then the big bead, then reading and making 0 to 9.
   - *Peekaboo*: the beads show for a moment, then a curtain closes. Say what
@@ -78,11 +79,16 @@ leaves the computer.
   planned for Sekka itself.
 - **Profiles belong to one Linux account.** Kids sharing a login pick their
   card at the start; separate accounts each have their own kids.
-- **So far it has run only in headless tests.** It hasn't been tried in a
-  live session or by children yet, its Nix package hasn't been built yet, and
-  there's no Sekka catalogue entry.
-- **English only**, written for kindergarten and first grade. Pon's voice
-  uses espeak-ng, which is clear but robotic.
+- **It's new.** It has run in headless tests and on one developer's desktop,
+  and its Nix package builds and passes its tests. It hasn't been tried by
+  children yet, and there's no Sekka catalogue entry.
+- **English only**, written for kindergarten and first grade.
+- **Pon's voice takes room and a moment.** Kokoro's model is 362 MB of the
+  package, and Anzan uses about half a gigabyte of memory with it loaded.
+  A line Pon hasn't said before takes a moment to make the first time
+  (Anzan makes a round's lines while the kid listens), and is kept after
+  that. Built without Kokoro, Pon speaks with espeak-ng, which is robotic
+  and harder to follow.
 
 ## Trying it
 

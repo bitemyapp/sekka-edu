@@ -10,6 +10,8 @@
   wayland,
   pipewire,
   espeak-ng,
+  sherpa-onnx,
+  kokoro,
   src,
   aizome,
   fonts,
@@ -40,8 +42,11 @@ rustPlatform.buildRustPackage {
       install -Dm644 $dir/data/computer.sekka.$app.desktop $out/share/applications/computer.sekka.$app.desktop
       install -Dm644 $dir/data/computer.sekka.$app.svg $out/share/icons/hicolor/scalable/apps/computer.sekka.$app.svg
     done
-    # Anzan plays its sounds with PipeWire and Pon speaks with espeak-ng.
+    # Anzan plays its sounds with PipeWire. Pon speaks in Kokoro through
+    # sherpa-onnx (crates/sekka-voice), or with espeak-ng if that fails.
     wrapProgram $out/bin/sekka-anzan \
+      --set-default SEKKA_EDU_KOKORO ${kokoro} \
+      --set-default SEKKA_EDU_SHERPA_ONNX ${sherpa-onnx}/lib/libsherpa-onnx-c-api.so \
       --suffix PATH : ${
         lib.makeBinPath [
           pipewire

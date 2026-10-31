@@ -24,7 +24,8 @@ use crate::lessons::{self, LESSONS, Question, Rng};
 use crate::progress::Progress;
 use crate::round::{self, Feedback, Hint, Phase, Round, words};
 use crate::scene::{self, Beads, Hit, PlayStage, PlayView, Scene, Screen, Stop, SummaryView};
-use crate::sound::{Sound, Sounds, Voice};
+use crate::sound::{Sound, Sounds};
+use sekka_voice::{Kind, Voice};
 
 pub const APP_ID: &str = "computer.sekka.Anzan";
 
@@ -44,6 +45,22 @@ const FLUSH_EVERY: Duration = Duration::from_secs(30);
 const TYPING_MS: i64 = 1200;
 
 const PRAISE: [&str; 6] = ["Yes!", "Great!", "You got it!", "Super!", "Hooray!", "Nice!"];
+
+/// What Pon says to ask `q` (peeks and flashes say more as they go).
+fn ask(q: &Question) -> String {
+    match q {
+        Question::Set { from: 0, target } => format!("Show me {}.", words(*target)),
+        Question::Set { target, .. } => format!("Now make {}.", words(*target)),
+        Question::Read { .. } => "What number is this?".to_owned(),
+        Question::PeekRead { .. } => "What did you see?".to_owned(),
+        Question::PeekSet { .. } => "Now make it!".to_owned(),
+        Question::Sum { start, op, n } | Question::Ghost { start, op, n, .. } => {
+            let op = if *op == lessons::Op::Add { "plus" } else { "take away" };
+            format!("{} {op} {}.", words(*start), words(*n))
+        }
+        Question::Flash { .. } => "How many altogether?".to_owned(),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum Msg {
@@ -122,7 +139,9 @@ pub struct Anzan {
     curtain_at: Option<i64>,
     hint_at: Option<i64>,
     phase_at: i64,
+    /// The praise showing, and where this round's run of praises starts.
     praise: usize,
+    praise_from: usize,
     down: Option<(Option<Hit>, Point)>,
     pressed: Option<Hit>,
     typed: (String, i64),
@@ -170,6 +189,7 @@ impl Anzan {
             hint_at: None,
             phase_at: 0,
             praise: 0,
+            praise_from: 0,
             down: None,
             pressed: None,
             typed: (String::new(), 0),
@@ -186,6 +206,8 @@ impl Anzan {
 
     /// A clock a test moves by hand.
     pub fn manual_clock(&mut self, start: i64) -> Rc<Cell<i64>> {
+        // And the same questions every run, whatever the day.
+        self.rng = Rng::new(0x5e66_a0ed);
         let t = Rc::new(Cell::new(start));
         let read = t.clone();
         self.clock = Rc::new(move || read.get());
@@ -204,6 +226,7 @@ impl Anzan {
 
     fn reload_kids(&mut self) {
         self.kids = self.store.profiles();
+        self.voice.prepare(self.kids.iter().map(|k| format!("Hi, {}!", k.name)));
         self.who_focus = self.who_focus.min(self.kids.len());
     }
 
@@ -318,6 +341,8 @@ impl Anzan {
         self.hint_at = None;
         self.curtain_at = None;
         self.intro = (!l.intro.is_empty() && !self.progress.intros.contains(l.id)).then_some(0);
+        self.praise_from = (now / 1000) as usize % PRAISE.len();
+        self.prepare_round();
         self.go(Screen::Play, cx);
         match self.intro {
             Some(_) => self.voice.say(l.intro[0]),
@@ -359,18 +384,37 @@ impl Anzan {
             (Phase::Peeking { .. }, _) => "Peek!".to_owned(),
             (Phase::Flashing { shown, gap: false, .. }, Question::Flash { numbers, .. }) => words(numbers[*shown]),
             (Phase::Flashing { .. }, _) => return,
-            (_, Question::Set { from: 0, target }) => format!("Show me {}.", words(*target)),
-            (_, Question::Set { target, .. }) => format!("Now make {}.", words(*target)),
-            (_, Question::Read { .. }) => "What number is this?".to_owned(),
-            (_, Question::PeekRead { .. }) => "What did you see?".to_owned(),
-            (_, Question::PeekSet { .. }) => "Now make it!".to_owned(),
-            (_, Question::Sum { start, op, n }) | (_, Question::Ghost { start, op, n, .. }) => {
-                let op = if *op == lessons::Op::Add { "plus" } else { "take away" };
-                format!("{} {op} {}.", words(*start), words(*n))
-            }
-            (_, Question::Flash { .. }) => "How many altogether?".to_owned(),
+            (_, q) => ask(q),
         };
         self.voice.say(text);
+    }
+
+    /// Praise for the `i`th answer of the round: each round runs through
+    /// them all from a place of its own, so it can be made ahead.
+    fn praise_for(&self, i: usize) -> usize {
+        (self.praise_from + i) % PRAISE.len()
+    }
+
+    /// Have Pon's lines for the round made while the kid listens and
+    /// thinks: the introduction, each question, its praise, and the end.
+    fn prepare_round(&self) {
+        let Some(r) = &self.round else { return };
+        let l = &LESSONS[r.lesson];
+        let mut lines: Vec<String> = Vec::new();
+        if self.intro.is_some() {
+            lines.extend(l.intro.iter().map(|s| (*s).to_owned()));
+        }
+        for (i, q) in r.questions.iter().enumerate() {
+            if let Question::Flash { numbers, .. } = q {
+                lines.extend(numbers.iter().map(|n| words(*n)));
+            }
+            lines.push(ask(q));
+            lines.push(format!("{} {}!", PRAISE[self.praise_for(i)], words(q.answer())));
+        }
+        let lantern = words(r.lesson as u32 + 1);
+        lines.push(format!("Hooray! Three stars! You lit lantern {lantern}!"));
+        lines.push(format!("You did it! You lit lantern {lantern}!"));
+        self.voice.prepare(lines);
     }
 
     /// Do `f` to the round, then make the sounds, slides and words it
@@ -386,7 +430,7 @@ impl Anzan {
         let done = r.is_done();
         match fb {
             Feedback::Right => {
-                self.praise = (self.praise + 1 + (now as usize % 3)) % PRAISE.len();
+                self.praise = self.praise_for(self.round.as_ref().map_or(0, |r| r.index));
                 self.sounds.play(Sound::Right);
                 let answer = self.round.as_ref().map_or(0, |r| r.question().answer());
                 self.voice.say(format!("{} {}!", PRAISE[self.praise], words(answer)));
@@ -608,6 +652,9 @@ impl Anzan {
                 self.sounds.play(Sound::Tap);
                 self.go(Screen::Free, cx);
                 self.voice.say("Play with the beads!");
+                // What the beads come to, as they're pushed: the numbers a
+                // kid makes most, made ahead.
+                self.voice.prepare((0..=100).map(words));
             }
             Hit::Sound => {
                 self.progress.sound = !self.progress.sound;
@@ -883,10 +930,13 @@ impl Anzan {
             ),
             _ => "No daily limit. Set one in Sekka Kids.".to_owned(),
         };
-        let voice_note = if self.voice.available() || self.quiet {
-            "Pon reads each question aloud."
-        } else {
-            "Pon needs espeak-ng installed to speak."
+        let voice_note = match self.voice.kind() {
+            Some(Kind::Kokoro) => "Pon reads each question aloud in Kokoro, a natural voice made on this computer.",
+            Some(Kind::Espeak) => {
+                "Pon reads each question aloud with espeak-ng. Kokoro, Sekka Edu's voice, is much clearer."
+            }
+            None if self.quiet => "Pon reads each question aloud.",
+            None => "Pon needs Kokoro or espeak-ng to speak.",
         };
         let mut items: Vec<Element<Msg>> = vec![
             text("Grown-ups").size(20.0).bold().into(),

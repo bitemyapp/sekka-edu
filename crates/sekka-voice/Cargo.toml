@@ -1,0 +1,12 @@
+[package]
+name = "sekka-voice"
+description = "The voice Sekka Edu's apps speak with: Kokoro through sherpa-onnx, or espeak-ng"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+libc.workspace = true
+log.workspace = true
