@@ -5,7 +5,7 @@
 use aizome_kit::layout::Vec2;
 use aizome_kit::layout::{Point, Rect, Size};
 use aizome_kit::sidestep_ui::kurbo::{RoundedRect, Shape};
-use aizome_kit::sidestep_ui::{Canvas, Color, LinearGradient, Shadow, StrokeStyle};
+use aizome_kit::sidestep_ui::{Canvas, Color, LinearGradient, StrokeStyle};
 use aizome_kit::theme::{FontSpec, Theme};
 
 /// The colours kids' screens are drawn with.
@@ -149,13 +149,12 @@ pub fn wrap(theme: &Theme, s: &str, width: f64, spec: FontSpec) -> Vec<String> {
     lines
 }
 
-/// A rounded card with a soft drop shadow.
+/// A rounded card on a hard shadow (Aizome's, and cheap: a blurred one at
+/// twice the scale costs a frame's budget on its own).
 pub fn card(c: &mut Canvas, r: Rect, radius: f64, fill: Color, edge: Color, look: &Look) {
     let shape = RoundedRect::from_rect(r, radius);
-    c.saved(|c| {
-        c.set_shadow(Some(Shadow { offset: Vec2::new(0.0, 6.0), blur: 14.0, color: look.shadow }));
-        c.fill(&shape, fill);
-    });
+    c.fill(&RoundedRect::from_rect(r + Vec2::new(0.0, 6.0), radius), look.shadow);
+    c.fill(&shape, fill);
     c.stroke(&shape, &StrokeStyle::new(2.0), edge);
 }
 
@@ -188,10 +187,8 @@ pub fn button(c: &mut Canvas, r: Rect, radius: f64, style: ButtonStyle, pressed:
     let lip = 6.0;
     let sink = if pressed { lip - 1.5 } else { 0.0 };
     let base = RoundedRect::from_rect(Rect::new(r.x0, r.y0 + lip, r.x1, r.y1), radius);
-    c.saved(|c| {
-        c.set_shadow(Some(Shadow { offset: Vec2::new(0.0, 4.0), blur: 8.0, color: look.shadow }));
-        c.fill(&base, style.lip);
-    });
+    c.fill(&RoundedRect::from_rect(Rect::new(r.x0, r.y0 + lip + 4.0, r.x1, r.y1 + 4.0), radius), look.shadow);
+    c.fill(&base, style.lip);
     let face = Rect::new(r.x0, r.y0 + sink, r.x1, r.y1 - lip + sink);
     let shape = RoundedRect::from_rect(face, radius);
     let shine = LinearGradient::new(

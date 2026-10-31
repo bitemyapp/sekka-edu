@@ -109,28 +109,24 @@ pub fn ease(t: f64) -> f64 {
 /// The wooden frame, the rods and the beam (beads go on after).
 pub fn soroban_frame(c: &mut Canvas, f: &Frame, look: &Look) {
     let outer = RoundedRect::from_rect(f.outer, 22.0);
-    c.saved(|c| {
-        c.set_shadow(Some(Shadow { offset: Vec2::new(0.0, 10.0), blur: 22.0, color: look.shadow }));
-        c.fill(&outer, look.wood_dark);
-    });
-    let grain = LinearGradient::new(
-        Point::new(f.outer.x0, f.outer.y0),
-        Point::new(f.outer.x1, f.outer.y1),
-        look.wood_light,
-        look.wood,
-    );
-    c.fill(&RoundedRect::from_rect(f.outer.inflate(-3.0, -3.0), 19.0), grain);
-    // The well the beads move in.
-    let well = RoundedRect::from_rect(f.inner.inflate(4.0, 4.0), 10.0);
-    c.fill(&well, look.wood_dark.mix(look.sky, 0.25).with_alpha(0.85));
+    c.fill(&RoundedRect::from_rect(f.outer + Vec2::new(0.0, 9.0), 22.0), look.shadow);
+    c.fill(&outer, look.wood_dark);
+    // Flat fills, not gradients: the soroban is drawn again with every new
+    // question, and big gradients cost milliseconds at twice the scale.
+    c.fill(&RoundedRect::from_rect(f.outer.inflate(-3.0, -3.0), 19.0), look.wood_light.mix(look.wood, 0.45));
     c.fill(
-        &well,
-        LinearGradient::new(
-            Point::new(0.0, f.inner.y0),
-            Point::new(0.0, f.inner.y1),
-            Color::rgba(0.0, 0.0, 0.0, 0.22),
-            Color::rgba(0.0, 0.0, 0.0, 0.05),
+        &RoundedRect::from_rect(
+            Rect::new(f.outer.x0 + 3.0, f.outer.y0 + 3.0, f.outer.x1 - 3.0, f.outer.y0 + 12.0),
+            8.0,
         ),
+        look.wood_light.with_alpha(0.7),
+    );
+    // The well the beads move in, shaded at the top.
+    let well = RoundedRect::from_rect(f.inner.inflate(4.0, 4.0), 10.0);
+    c.fill(&well, look.wood_dark.mix(look.sky, 0.25).mix(Color::BLACK, 0.12));
+    c.fill_rect(
+        Rect::new(f.inner.x0 - 2.0, f.inner.y0 - 4.0, f.inner.x1 + 2.0, f.inner.y0 + 4.0),
+        Color::rgba(0.0, 0.0, 0.0, 0.14),
     );
     // A few lines of grain on the wood.
     let line = StrokeStyle::new(1.2).with_cap(LineCap::Round);
@@ -354,11 +350,9 @@ pub fn bubble(c: &mut Canvas, r: Rect, to: Point, look: &Look) {
     tail.quad_to(Point::new(r.x0 - 14.0, y), to);
     tail.quad_to(Point::new(r.x0 - 4.0, y + 8.0), Point::new(r.x0 + 2.0, y + 16.0));
     tail.close_path();
-    c.saved(|c| {
-        c.set_shadow(Some(Shadow { offset: Vec2::new(0.0, 5.0), blur: 12.0, color: look.shadow }));
-        c.fill(&body, look.card);
-        c.fill(&tail, look.card);
-    });
+    c.fill(&RoundedRect::from_rect(r + Vec2::new(0.0, 6.0), 28.0), look.shadow);
+    c.fill(&body, look.card);
+    c.fill(&tail, look.card);
     c.stroke(&body, &StrokeStyle::new(2.0), look.card_edge);
     // The tail over the body's edge, so they read as one.
     c.fill(&tail, look.card);

@@ -145,3 +145,25 @@ every app. An app adds its own unflushed time with `Tracker::unwritten`.
 Frames tick every 20 ms, but only while something moves: a slide, a cheer, a
 peek or flash, the curtain, or the summary's stars. A still screen draws
 nothing.
+
+The canvas's `Hash` leaves out what moves by itself, and `scene::parts`
+gives each moving thing its own rectangle: each soroban rod, Pon, the peek's
+bar, the summary's stars, the kid's marker, blinking faces and the pressed
+button. A slide redraws one rod; a new question or screen redraws the whole
+window. Big gradients are expensive at twice the scale, so the sky is drawn
+in fine flat bands and the frame flat; shadows are hard, as in Aizome. The
+beads keep their gradients.
+
+`cargo test --release -p sekka-anzan --test budget -- --ignored --nocapture`
+times frames from the clock's tick to the damage drawn at 2×. On
+wx-workstation (load average 11 to 20, shared) on 2026-10-31:
+
+| Frame | p50 | p95 |
+| --- | --- | --- |
+| A bead sliding (free play, three rods) | 1.7 ms | 2.8 ms |
+| The whole window (a new question or screen) | 7.5 ms | 9.4 ms |
+| Still | nothing drawn | |
+
+A blink redraws the awake beads' rods and Pon, about 5 ms every 3.7 s.
+Aizome's budget is 4 ms from an event to its frame: slides are inside it,
+whole-window changes aren't yet.

@@ -4,7 +4,7 @@
 
 use aizome_kit::layout::{Point, Rect, Size, Vec2};
 use aizome_kit::sidestep_ui::kurbo::{BezPath, Circle};
-use aizome_kit::sidestep_ui::{Canvas, Color, LinearGradient, RadialGradient};
+use aizome_kit::sidestep_ui::{Canvas, Color, RadialGradient};
 
 use crate::look::Look;
 
@@ -72,8 +72,16 @@ fn noise(i: u32) -> f64 {
 /// design's points through `fit`. `hills` is how high the land comes (0
 /// for none).
 pub fn backdrop(c: &mut Canvas, b: Rect, fit: &Fit, look: &Look, hills: f64) {
-    let sky = LinearGradient::new(Point::new(0.0, b.y0), Point::new(0.0, b.y1), look.sky_top, look.sky);
-    c.fill(&b, sky);
+    // The sky in flat bands too fine to see: a gradient over the whole
+    // window costs several milliseconds a frame at twice the scale, flat
+    // fills almost nothing.
+    let bands = 48;
+    for i in 0..bands {
+        let t = f64::from(i) / f64::from(bands);
+        let y0 = (b.y0 + b.height() * t).floor();
+        let y1 = (b.y0 + b.height() * (t + 1.0 / f64::from(bands))).ceil();
+        c.fill_rect(Rect::new(b.x0, y0, b.x1, y1), look.sky_top.mix(look.sky, (t + 0.5 / f64::from(bands)) as f32));
+    }
     c.saved(|c| {
         fit.apply(c);
         let v = fit.visible(b);

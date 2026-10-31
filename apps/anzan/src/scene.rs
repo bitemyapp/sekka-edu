@@ -142,7 +142,11 @@ pub struct SummaryView {
     pub has_next: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// What the canvas draws. Its `Hash` leaves out what moves by itself (the
+/// beads sliding, cheers, blinks, a pressed button, the peek's bar, the
+/// summary's stars): [`parts`] gives those their own rectangles, so a frame
+/// of a slide redraws the soroban, not the window.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scene {
     pub screen: Screen,
     pub who: Who,
@@ -883,4 +887,150 @@ pub fn choice_center(i: usize) -> Point {
 /// Where the Done button is, in the design's points.
 pub fn check_center() -> Point {
     CHECK.center()
+}
+
+// What moves by itself, apart from the rest.
+
+impl std::hash::Hash for Scene {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.screen.hash(h);
+        (&self.who.cards, self.who.focus).hash(h);
+        (&self.kid, &self.stops, self.focus, self.here, self.sound, self.chapter).hash(h);
+        if let Some(p) = &self.play {
+            (p.lesson, &p.results, p.count, &p.question, &p.stage, &p.hint, &p.chosen, p.praise).hash(h);
+            (p.beads.ghost, p.beads.numbers).hash(h);
+            // Whether the peek is on shows in the bubble; how much is left is
+            // a part.
+            (p.peek_left > 0).hash(h);
+        }
+        if let Some(s) = &self.summary {
+            (s.lesson, s.stars, s.first_try, s.items, s.has_next, s.confetti.is_some()).hash(h);
+        }
+        self.free.as_ref().map(|b| b.abacus.len()).hash(h);
+    }
+}
+
+fn hash_of(v: impl std::hash::Hash) -> u64 {
+    use std::hash::Hasher;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    v.hash(&mut h);
+    h.finish()
+}
+
+/// The soroban's parts: a rod each (a slide moves one rod, and draws only
+/// that), and the whole of it while the curtain moves.
+fn soroban_parts(part: &mut impl FnMut(Rect, u64), b: &Beads, hint: Option<&Hint>, pulse: u16) {
+    let f = frame(b.abacus.len());
+    for rod in 0..b.abacus.len() {
+        let x = f.rod_x(rod);
+        let hinted = matches!(hint, Some(Hint::Push { rod: r, .. }) if *r == rod);
+        let right = if hinted { 104.0 } else { 70.0 };
+        part(
+            Rect::new(x - 70.0, f.outer.y0 - 24.0, x + right, f.outer.y1 + 50.0),
+            hash_of((b.abacus.rod(rod), b.at.get(rod), b.cheer, b.blink, b.rod == Some(rod), hinted.then_some(pulse))),
+        );
+    }
+    if b.curtain > 0 {
+        part(soroban_rect(b.abacus.len()), hash_of(b.curtain));
+    }
+}
+
+/// The soroban's rectangle, with room for its cheers, glows, arrow and
+/// numbers.
+fn soroban_rect(rods: usize) -> Rect {
+    let f = frame(rods);
+    Rect::new(f.outer.x0 - 24.0, f.outer.y0 - 24.0, f.outer.x1 + 70.0, f.outer.y1 + 50.0)
+}
+
+fn round_rect(c: (Point, f64)) -> Rect {
+    Rect::new(c.0.x - c.1 - 12.0, c.0.y - c.1 - 8.0, c.0.x + c.1 + 12.0, c.0.y + c.1 + 22.0)
+}
+
+/// A button's rectangle (with its lip and shadow), in the design's points.
+fn hit_rect(s: &Scene, hit: Hit) -> Option<Rect> {
+    let pad = |r: Rect| Rect::new(r.x0 - 10.0, r.y0 - 8.0, r.x1 + 10.0, r.y1 + 16.0);
+    Some(match hit {
+        Hit::Home => round_rect(HOME),
+        Hit::Sound => round_rect(SOUND),
+        Hit::GrownUps => round_rect(GROWN),
+        Hit::Free => round_rect(FREE),
+        Hit::Hint => round_rect(HINT),
+        Hit::Restart => round_rect(RESTART),
+        Hit::Kid => pad(KID),
+        Hit::Check | Hit::Next => pad(CHECK),
+        Hit::Again => pad(AGAIN),
+        Hit::NextLesson => pad(NEXT_LESSON),
+        Hit::Clear => pad(CLEAR),
+        Hit::SwitchPlayer => pad(SWITCH),
+        Hit::Choice(v) => {
+            let i = s.play.as_ref()?.question.choices()?.iter().position(|c| *c == v)?;
+            pad(choice_rect(i))
+        }
+        Hit::Stop(i) => Rect::from_center_size(stop_at(i), Size::new(130.0, 150.0)),
+        Hit::Who(w) => {
+            let rects = who::cards(s.who.cards.len());
+            let i = match w {
+                WhoHit::Kid(i) => i,
+                WhoHit::New => s.who.cards.len(),
+            };
+            rects.get(i)?.inflate(14.0, 14.0)
+        }
+        Hit::Bead(..) => return None,
+    })
+}
+
+/// The parts of the drawing that move by themselves, in the canvas's
+/// points, each with a hash of how it looks now.
+pub fn parts(s: &Scene, size: Size) -> Vec<(Rect, u64)> {
+    let fit = Fit::of_size(size);
+    let mut out: Vec<(Rect, u64)> = Vec::new();
+    let mut part = |r: Rect, hash: u64| out.push((fit.to_window(r), hash));
+    match s.screen {
+        Screen::Who => {
+            // The animals blink.
+            for r in who::cards(s.who.cards.len()).iter().take(s.who.cards.len()) {
+                let face = Rect::new(r.x0, r.y0, r.x1, r.y0 + 160.0);
+                part(face, hash_of(s.who.blink));
+            }
+        }
+        Screen::Map => {
+            part(Rect::new(KID.x0, KID.y0, KID.x0 + 70.0, KID.y1), hash_of(s.blink));
+            let at = stop_at(s.here);
+            part(Rect::new(at.x - 80.0, at.y - 70.0, at.x - 16.0, at.y + 20.0), hash_of((s.blink, s.hop)));
+        }
+        Screen::Play => {
+            if let Some(p) = &s.play {
+                soroban_parts(&mut part, &p.beads, p.hint.as_ref(), p.pulse);
+                let bob = Rect::new(PON.0.x - 90.0, PON.0.y - 110.0, PON.0.x + 80.0, PON.0.y + 80.0);
+                part(bob, hash_of((s.blink, p.beads.cheer)));
+                if p.peek_left > 0 {
+                    part(
+                        Rect::new(BUBBLE.x0 + 50.0, BUBBLE.y1 - 16.0, BUBBLE.x1 - 50.0, BUBBLE.y1 - 2.0),
+                        hash_of(p.peek_left),
+                    );
+                }
+            }
+        }
+        Screen::Free => {
+            if let Some(b) = &s.free {
+                soroban_parts(&mut part, b, None, 0);
+                // The number in the bubble follows the beads.
+                part(BUBBLE.inflate(4.0, 4.0), hash_of(b.abacus.value()));
+                part(Rect::new(PON.0.x - 90.0, PON.0.y - 110.0, PON.0.x + 80.0, PON.0.y + 80.0), hash_of(s.blink));
+            }
+        }
+        Screen::Summary => {
+            if let Some(v) = &s.summary {
+                part(Rect::new(SUMMARY.x0 + 20.0, 330.0, SUMMARY.x1 - 20.0, 446.0), hash_of((v.shown, v.pop)));
+                if let Some(t) = v.confetti {
+                    part(Rect::new(0.0, 0.0, stage::W, stage::H), hash_of(t));
+                }
+            }
+        }
+        Screen::Rest | Screen::NewKid => {}
+    }
+    if let Some(r) = s.pressed.and_then(|h| hit_rect(s, h)) {
+        part(r, 1);
+    }
+    out
 }

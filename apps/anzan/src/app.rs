@@ -1265,6 +1265,7 @@ impl Program for Anzan {
             return stack![backdrop, newkid::view(&self.newkid, !self.kids.is_empty(), &look).map(Msg::NewKid)].into();
         }
         canvas(self.scene(), scene::paint)
+            .parts(scene::parts)
             .on_event(stage_event)
             .focusable()
             .focus_ring(FocusRing::Never)
