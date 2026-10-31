@@ -26,6 +26,7 @@ use crate::listen::{self, Ears, Heard};
 use crate::phonics;
 use crate::progress::{self, Progress};
 use crate::scene::{self, BookCard, CoverView, DoneView, Hit, Mic, ReadView, Scene, Screen, ShelfView};
+use crate::words;
 
 pub const APP_ID: &str = "computer.sekka.Ondoku";
 
@@ -35,8 +36,17 @@ const FRAME: Duration = Duration::from_millis(33);
 const FLUSH_EVERY: Duration = Duration::from_secs(30);
 const BLINK_EVERY: Duration = Duration::from_millis(3700);
 const BLINK_MS: Duration = Duration::from_millis(160);
-/// After "Let's sound it out", how long before Fumi says the word.
-const SOUND_OUT_MS: Duration = Duration::from_millis(3500);
+/// After "Let's sound it out", how long Fumi waits for a try before she
+/// says the word herself; after a try that isn't the word, how long she
+/// waits for another. She never talks while a kid is reading, or before
+/// she's heard what they read.
+const WAIT_FOR_TRY: i64 = 3_000;
+const WAIT_AFTER_TRY: i64 = 2_500;
+/// How long "Let's sound it out" is taken to be until the voice says.
+const PROMPT_MS: i64 = 1_500;
+/// How often Fumi looks again while a kid is reading.
+const LOOK_AGAIN: Duration = Duration::from_millis(250);
+const SOUND_IT_OUT: &str = "Let's sound it out.";
 const CONFETTI_MS: i64 = 2600;
 
 const PRAISE: [&str; 6] = [
@@ -107,6 +117,8 @@ struct Session {
     /// When the page showed, and when the reader started to speak on it.
     shown: i64,
     onset: Option<i64>,
+    /// Whether anything was heard on this page, read right or not.
+    tried: bool,
 }
 
 impl Session {
@@ -151,6 +163,12 @@ pub struct Ondoku {
     ears: EarState,
     mic: Mic,
     level: f32,
+    /// The reader is reading, or what they read is still being heard; when
+    /// it was last all heard; and until when Fumi is talking, as far as
+    /// is known.
+    hearing: bool,
+    heard_at: i64,
+    fumi_until: i64,
     say: String,
     /// Fumi reading the page aloud: since when, for how long.
     aloud: Option<(i64, f32)>,
@@ -196,6 +214,9 @@ impl Ondoku {
             ears: EarState::Idle,
             mic: Mic::Off,
             level: 0.0,
+            hearing: false,
+            heard_at: 0,
+            fumi_until: 0,
             say: String::new(),
             aloud: None,
             chunks: None,
@@ -434,6 +455,7 @@ impl Ondoku {
             current: Page::new(&self.library[book].pages[page]),
             shown: now,
             onset: None,
+            tried: false,
         });
         self.book = Some(book);
         self.go(Screen::Read, cx);
@@ -446,8 +468,6 @@ impl Ondoku {
         } else {
             self.read_aloud();
         }
-        // The page's words, ready for when they're tapped.
-        self.prepare_page();
     }
 
     /// Show `page` of the book being read.
@@ -459,15 +479,20 @@ impl Ondoku {
         s.current = Page::new(&book.pages[page]);
         s.shown = (self.clock)();
         s.onset = None;
+        s.tried = false;
         self.progress.at(&book.id, page);
         self.save();
         self.turn += 1;
+        // What the ears said of the last turn is done with.
+        self.hearing = false;
         self.aloud = None;
         self.chunks = None;
         self.voice.hush();
         if self.mic == Mic::On {
             self.open_ears();
         }
+        // The page's words, ready for when they're tapped.
+        self.prepare_page();
     }
 
     fn page_text(&self) -> Option<String> {
@@ -483,7 +508,9 @@ impl Ondoku {
                 .filter(|w| !w.is_empty())
                 .collect();
             words.dedup();
-            self.voice.prepare(words);
+            // And what Fumi says as it's read, the help first.
+            let lines = std::iter::once(SOUND_IT_OUT).chain(PRAISE).map(String::from);
+            self.voice.prepare(lines.chain(words));
         }
     }
 
@@ -657,9 +684,16 @@ impl Ondoku {
                     s.current.guess(&t);
                 }
             }
+            Heard::Reading(turn, on) if turn == self.turn => {
+                self.hearing = on;
+                if !on {
+                    self.heard_at = self.now();
+                }
+            }
             Heard::Said(turn, t) if turn == self.turn => self.said(&t, cx),
             Heard::Quiet(turn) if turn == self.turn => self.stuck(cx),
             Heard::Closed(turn) if turn == self.turn => {
+                self.hearing = false;
                 if self.mic == Mic::On {
                     self.mic = Mic::Off;
                     self.say = "I'll wait. Press the green button when you want to read to me.".into();
@@ -675,6 +709,9 @@ impl Ondoku {
         let now = self.now();
         let level = self.reading.as_ref().map_or(1, |s| self.library[s.book].level);
         let Some(s) = self.reading.as_mut() else { return };
+        if !words::heard(t).is_empty() {
+            s.tried = true;
+        }
         let was_done = s.current.done();
         if !s.current.hear(t, now) {
             return;
@@ -692,24 +729,29 @@ impl Ondoku {
         }
     }
 
-    /// The reader has gone quiet in the middle of a page: help with the
-    /// next word. In the first books, sound it out first.
+    /// The reader has gone quiet in the middle of a page, having tried it:
+    /// help with the next word. In the first books, sound it out first, and
+    /// give them the time to try it.
     fn stuck(&mut self, cx: &mut Cx<Msg>) {
-        if !self.progress.help || self.mic != Mic::On {
+        if !self.progress.help || self.mic != Mic::On || self.hearing {
             return;
         }
         let Some(s) = &self.reading else { return };
-        if s.current.done() || s.current.started.is_none() {
+        if s.current.done() || !s.tried {
             return;
         }
         let w = s.current.next;
+        if self.sounding_out() == Some(w) {
+            return;
+        }
         let word = s.current.words[w].text.clone();
         let level = self.library[s.book].level;
         let pieces = phonics::chunks(&word);
         if level <= 2 && pieces.len() >= 2 {
             self.chunks = Some((w, pieces));
-            self.speak("Let's sound it out.");
-            cx.after(SOUND_OUT_MS, Msg::Stuck(self.turn, w));
+            self.speak(SOUND_IT_OUT);
+            self.fumi_until = self.now() + PROMPT_MS;
+            cx.after(Duration::from_millis((PROMPT_MS + WAIT_FOR_TRY) as u64), Msg::Stuck(self.turn, w));
         } else {
             self.help_with(w);
         }
@@ -839,8 +881,11 @@ impl Ondoku {
                     s.current.again();
                     s.shown = now;
                     s.onset = None;
+                    s.tried = false;
                 }
                 self.turn += 1;
+                // What the ears said of the last turn is done with.
+                self.hearing = false;
                 self.chunks = None;
                 if self.mic == Mic::On {
                     self.open_ears();
@@ -1041,7 +1086,7 @@ impl Ondoku {
         };
         let ears_note = match &self.ears {
             EarState::Ready(_) | EarState::Pretend => {
-                "Fumi listens with Whisper, through Koe, on this computer. What she hears is never saved or sent anywhere."
+                "Fumi listens with Whisper, the model Koe uses, on this computer. What she hears is never saved or sent anywhere."
                     .to_owned()
             }
             EarState::Loading(_) | EarState::Idle => "Fumi's ears are getting ready.".to_owned(),
@@ -1322,6 +1367,7 @@ impl Program for Ondoku {
             Msg::Heard(h) => self.heard(h, cx),
             Msg::Spoken(s) => {
                 let now = self.now();
+                self.fumi_until = now + (f64::from(s.seconds) * 1000.0) as i64;
                 // Fumi's own voice isn't reading.
                 if let EarState::Ready(e) = &self.ears {
                     e.mute(s.seconds + 0.3);
@@ -1332,8 +1378,21 @@ impl Program for Ondoku {
                 }
             }
             Msg::Stuck(turn, w) => {
-                if turn == self.turn && self.reading.as_ref().is_some_and(|s| s.current.next == w) {
-                    self.help_with(w);
+                // Still on the word being sounded out: say it, once the kid's
+                // had time to try it and isn't trying it now.
+                if turn == self.turn
+                    && self.reading.as_ref().is_some_and(|s| s.current.next == w)
+                    && self.sounding_out() == Some(w)
+                {
+                    let now = self.now();
+                    let at = (self.fumi_until + WAIT_FOR_TRY).max(self.heard_at + WAIT_AFTER_TRY);
+                    if self.hearing {
+                        cx.after(LOOK_AGAIN, Msg::Stuck(turn, w));
+                    } else if now < at {
+                        cx.after(Duration::from_millis((at - now) as u64), Msg::Stuck(turn, w));
+                    } else {
+                        self.help_with(w);
+                    }
                 }
             }
             Msg::NewKid(m) => match m {

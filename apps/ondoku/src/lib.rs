@@ -1,7 +1,7 @@
 //! Ondoku 音読, a reading buddy. In Japanese schools, ondoku is reading
 //! aloud: the daily homework a grown-up listens to and signs. Here a kid
-//! reads aloud to Fumi the owl, who listens (Whisper, through Koe, on this
-//! computer), follows along word by word, sounds out or says a word when
+//! reads aloud to Fumi the owl, who listens (Whisper, the model Koe uses, on
+//! this computer), follows along word by word, sounds out or says a word when
 //! they're stuck, and can read any page aloud herself (Kokoro, through
 //! `sekka-voice`). The books run from kindergarten's first decodable
 //! readers to 5th grade, the library's own and children's classics.
@@ -18,6 +18,7 @@ pub mod listen;
 pub mod phonics;
 pub mod progress;
 pub mod scene;
+pub mod whisper;
 pub mod words;
 
 pub use app::{APP_ID, Msg, Ondoku};

@@ -167,11 +167,14 @@ fn a_tapped_word_is_said_and_a_stuck_reader_is_helped() {
     assert!(text.starts_with("Kim has a big bag."), "{text}");
     r.say("Kim has a big bag");
     assert_eq!(r.h.program().page().unwrap().next, 5);
-    // Quiet on "Kim": its sounds show, then Fumi says it.
+    // Quiet on "Kim": its sounds show, then, given time to try it, Fumi
+    // says it.
     let turn = r.h.program().turn();
     r.h.send(Msg::Heard(Heard::Quiet(turn)));
     assert_eq!(r.h.program().sounding_out(), Some(5));
-    r.h.send(Msg::Stuck(turn, 5));
+    r.wait(4_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5);
+    r.wait(600);
     let page = r.h.program().page().unwrap();
     assert_eq!((page.marks[5], page.next), (Mark::Helped, 6));
     // A word tapped where it's drawn: "fill".
@@ -183,6 +186,60 @@ fn a_tapped_word_is_said_and_a_stuck_reader_is_helped() {
     assert_eq!(page.marks[fill], Mark::Helped);
     assert_eq!(r.h.program().sounding_out(), Some(fill));
     assert!(r.h.program().says().contains("fill"), "{}", r.h.program().says());
+}
+
+/// Sounding a word out, a kid gets time: Fumi doesn't say it while they're
+/// trying, or before she's heard what they tried; a try that's right moves
+/// on without her, and she doesn't go on to the next word by herself.
+#[test]
+fn fumi_waits_while_a_word_is_tried() {
+    let mut r = ondoku("tries", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Tim Can Dig");
+    r.key(NamedKey::Enter);
+    r.key(NamedKey::ArrowRight);
+    r.key(NamedKey::ArrowRight);
+    r.say("Kim has a big bag");
+    let turn = r.h.program().turn();
+    let reading = |r: &mut Run, on: bool| r.h.send(Msg::Heard(Heard::Reading(turn, on)));
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), Some(5));
+    // They start trying after a couple of seconds, slowly...
+    r.wait(2_000);
+    reading(&mut r, true);
+    r.wait(6_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5, "not while they're trying");
+    // ...and get it wrong: Fumi waits for another try.
+    r.say("Kip");
+    reading(&mut r, false);
+    r.wait(2_000);
+    assert_eq!(r.h.program().page().unwrap().next, 5, "a moment for another try");
+    reading(&mut r, true);
+    r.wait(1_500);
+    r.say("Kim");
+    reading(&mut r, false);
+    let page = r.h.program().page().unwrap();
+    assert_eq!((page.marks[5], page.next), (Mark::Read, 6));
+    assert_eq!(r.h.program().sounding_out(), None);
+    r.wait(10_000);
+    assert_eq!(r.h.program().page().unwrap().next, 6);
+}
+
+/// A first word read wrong is still a try: Fumi helps with it.
+#[test]
+fn a_first_word_misread_is_helped() {
+    let mut r = ondoku("first-word", ThemeChoice::Day, &[HANA]);
+    r.key(NamedKey::Enter);
+    r.open("Tim Can Dig");
+    r.key(NamedKey::Enter);
+    r.key(NamedKey::ArrowRight);
+    r.key(NamedKey::ArrowRight);
+    let turn = r.h.program().turn();
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), None, "nothing tried yet");
+    r.say("Kip");
+    r.h.send(Msg::Heard(Heard::Quiet(turn)));
+    assert_eq!(r.h.program().sounding_out(), Some(0));
 }
 
 #[test]

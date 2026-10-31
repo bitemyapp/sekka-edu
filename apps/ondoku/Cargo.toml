@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 aizome-kit.workspace = true
 aizome-koe.workspace = true
+whisper-rs.workspace = true
 sekka-kid.workspace = true
 sekka-kid-kit.workspace = true
 sekka-voice.workspace = true

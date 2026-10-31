@@ -61,8 +61,8 @@ is Fumi, a little owl.
   lights up as Fumi hears it. A word left out gets dots under it, and going
   back over words doesn't lose your place.
 - **Help with a word.** Stop on a word and Fumi helps. In the first books she
-  shows its sounds first (h·e·n·s), then says it if you're still stuck. Tap
-  any word to hear it.
+  shows its sounds first (h·e·n·s) and waits while you try it, then says it
+  if you're still stuck. Tap any word to hear it.
 - **Or listen first.** The blue button has Fumi read the page, lighting each
   word as she says it, so a kid can follow with a finger and then read it
   back.
@@ -90,9 +90,9 @@ is Fumi, a little owl.
   "a" and "g" the way children write them.
 
 The microphone is on only while the green button is, and it switches itself
-off after 40 seconds of quiet. Fumi listens with Whisper, through Koe,
-Aizome's dictation, on this computer. What she hears is never saved and never
-sent anywhere.
+off after 40 seconds of quiet. Fumi listens with Whisper, the model Koe,
+Aizome's dictation, uses, on this computer. What she hears is never saved
+and never sent anywhere.
 
 ## Sekka Kid profiles and Sekka Kids
 
@@ -135,7 +135,7 @@ leaves the computer.
   children's voices. She may miss words a small child reads. She may also
   take a word that's nearly right as right: she's meant to be generous.
   She's a buddy to practise with, not a reading test. Ondoku needs a
-  microphone, and Whisper's model is 148 MB of the package.
+  microphone, and Whisper's model is 82 MB of the package.
 - **The voice takes room and a moment.** Pon and Fumi speak with Kokoro,
   whose model is 362 MB of the package, and each app uses about half a
   gigabyte of memory with it loaded (Ondoku more while Fumi listens, with

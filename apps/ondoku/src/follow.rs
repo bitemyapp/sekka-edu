@@ -182,7 +182,15 @@ impl Page {
     /// moves on past the last word heard. Whether any word was.
     pub fn hear(&mut self, heard: &str, now: i64) -> bool {
         let heard = words::heard(heard);
-        let Some((window, steps, reached)) = self.follow(&heard) else { return false };
+        let followed = self.follow(&heard);
+        // Words heard before any ahead: a reader going back, perhaps to fix
+        // a word they missed.
+        let back = match &followed {
+            None => heard.len(),
+            Some((_, steps, _)) => steps.iter().take_while(|s| **s == Step::Extra).count(),
+        };
+        self.corrected(&heard[..back]);
+        let Some((window, steps, reached)) = followed else { return false };
         let mut at = 0;
         for s in steps {
             if at >= reached {
@@ -217,6 +225,21 @@ impl Page {
         self.started.get_or_insert(now);
         self.ended = Some(now);
         true
+    }
+
+    /// A word missed just before where the reader is (among as many words
+    /// back as they went, and two more), said again now, counts as read:
+    /// they've fixed it, which running records count as reading it.
+    fn corrected(&mut self, said: &[String]) {
+        let back = said.len().max(1) + 2;
+        let behind: Vec<usize> = (0..self.next).rev().filter(|i| self.words[*i].spoken()).take(back).collect();
+        for w in said {
+            if let Some(&i) =
+                behind.iter().find(|&&i| self.marks[i] == Mark::Missed && words::same(&self.words[i].key, w))
+            {
+                self.marks[i] = Mark::Read;
+            }
+        }
     }
 
     /// Fumi says word `i`: it's helped, and if it's the next to read, the
@@ -310,6 +333,23 @@ mod tests {
         assert_eq!(p.next, 3);
         p.hear("dig", 0);
         assert!(p.done());
+    }
+
+    #[test]
+    fn going_back_to_fix_a_word_counts_it() {
+        let mut p = Page::new("The big red hen sat on the nest.");
+        p.hear("The big rod hen sat", 0);
+        assert_eq!(marks(&p), "rrmrr...");
+        assert!(!p.hear("red", 0), "fixing a word doesn't move the page");
+        assert_eq!((marks(&p).as_str(), p.next), ("rrrrr...", 5));
+        // Going back over it on the way on fixes it too; saying it wrong
+        // again doesn't.
+        let mut q = Page::new("The big red hen sat on the nest.");
+        q.hear("The big rod hen sat", 0);
+        q.hear("rod hen sat on the", 0);
+        assert_eq!(marks(&q), "rrmrrrr.");
+        q.hear("red hen sat on the nest", 0);
+        assert_eq!(marks(&q), "rrrrrrrr");
     }
 
     #[test]
