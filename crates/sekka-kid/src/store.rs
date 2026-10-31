@@ -101,6 +101,7 @@ impl Store {
         let profile = Profile {
             id: new_id(),
             name,
+            sounds_like: None,
             animal: new.animal,
             color: new.color,
             grade: new.grade,
@@ -119,7 +120,11 @@ impl Store {
     pub fn update(&self, p: &Profile) -> io::Result<()> {
         self.edit_profiles(|kids| match kids.iter_mut().find(|k| k.id == p.id) {
             Some(k) => {
-                *k = Profile { name: NewProfile::clean_name(&p.name), ..p.clone() };
+                *k = Profile {
+                    name: NewProfile::clean_name(&p.name),
+                    sounds_like: NewProfile::clean_sound(p.sounds_like.as_deref()),
+                    ..p.clone()
+                };
                 Ok(())
             }
             None => Err(io::Error::new(io::ErrorKind::NotFound, "no such kid")),

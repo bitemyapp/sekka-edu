@@ -18,7 +18,7 @@ use sekka_kid_kit::newkid::{self, NewKid, NewKidMsg};
 use sekka_kid_kit::stage::Fit;
 use sekka_kid_kit::who::{Card, Who, WhoHit};
 use sekka_kid_kit::{Look, instance, stage};
-use sekka_voice::{Kind, Spoken, Voice};
+use sekka_voice::{Kind, Spoken, Voice, hints};
 
 use crate::follow::{Mark, Page};
 use crate::library::{self, Book};
@@ -26,7 +26,7 @@ use crate::listen::{self, Ears, Heard};
 use crate::phonics;
 use crate::progress::{self, Progress};
 use crate::scene::{self, BookCard, CoverView, DoneView, Hit, Mic, ReadView, Scene, Screen, ShelfView};
-use crate::words;
+use crate::words::{self, Word};
 
 pub const APP_ID: &str = "computer.sekka.Ondoku";
 
@@ -60,7 +60,7 @@ const CONFETTI_MS: i64 = 2600;
 const PRAISE: [&str; 6] = [
     "Great reading!",
     "Wonderful! Turn the page.",
-    "You read that so well!",
+    "You [read](red) that so well!",
     "Hooray! On to the next page.",
     "Beautiful reading!",
     "Yes! You did it!",
@@ -310,7 +310,7 @@ impl Ondoku {
     fn reload_kids(&mut self) {
         self.kids = self.store.profiles();
         self.who_focus = self.who_focus.min(self.kids.len());
-        self.voice.prepare(self.kids.iter().map(|k| format!("Hi, {}! Let's read a book.", k.name)));
+        self.voice.prepare(self.kids.iter().map(|k| format!("Hi, {}! Let's read a book.", said_name(k))));
     }
 
     fn touch(&mut self) {
@@ -350,9 +350,10 @@ impl Ondoku {
         self.minutes_left().is_some_and(|m| m <= 0.0)
     }
 
+    /// Fumi says `line`, which shows without its hints.
     fn speak(&mut self, line: impl Into<String>) {
         let line = line.into();
-        self.say.clone_from(&line);
+        self.say = hints::shown(&line);
         self.voice.say(line);
     }
 
@@ -369,7 +370,7 @@ impl Ondoku {
         self.tracker = Some(Tracker::new(self.store.clone(), &kid.id, APP_ID));
         self.shelf_level = self.progress.shelf.unwrap_or_else(|| library::level_for(kid.grade));
         self.shelf_page = 0;
-        let hi = format!("Hi, {}! Let's read a book.", kid.name);
+        let hi = format!("Hi, {}! Let's read a book.", said_name(&kid));
         self.kid = Some(kid);
         self.touch();
         self.start_ears();
@@ -483,7 +484,7 @@ impl Ondoku {
             helped: 0,
             reading_ms: 0,
             page,
-            current: Page::new(&self.library[book].pages[page]),
+            current: Page::new(&self.library[book].voiced[page]),
             shown: now,
             onset: None,
             tried: false,
@@ -508,7 +509,7 @@ impl Ondoku {
         let book = &self.library[s.book];
         s.fold();
         s.page = page;
-        s.current = Page::new(&book.pages[page]);
+        s.current = Page::new(&book.voiced[page]);
         s.shown = (self.clock)();
         s.onset = None;
         s.tried = false;
@@ -534,13 +535,17 @@ impl Ondoku {
         Some(self.library[s.book].pages[s.page].clone())
     }
 
+    /// The page as written, with its hints, as Fumi reads it aloud: on one
+    /// line.
+    fn page_voiced(&self) -> Option<String> {
+        let s = self.reading.as_ref()?;
+        Some(self.library[s.book].voiced[s.page].split_whitespace().collect::<Vec<_>>().join(" "))
+    }
+
     fn prepare_page(&self) {
-        if let Some(text) = self.page_text() {
-            let mut words: Vec<String> = text
-                .split_whitespace()
-                .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_owned())
-                .filter(|w| !w.is_empty())
-                .collect();
+        if let Some(s) = &self.reading {
+            let mut words: Vec<String> =
+                s.current.words.iter().filter(|w| w.spoken()).map(say_word).filter(|w| !w.is_empty()).collect();
             words.dedup();
             // And what Fumi says as it's read, the help first.
             let help = [SOUND_IT_OUT, NOT_QUITE_SOUND, NOT_QUITE, SKIPPED];
@@ -584,14 +589,14 @@ impl Ondoku {
 
     /// Fumi reads the page aloud; each word lights as she says it.
     fn read_aloud(&mut self) {
-        let Some(text) = self.page_text() else { return };
+        let Some(line) = self.page_voiced() else { return };
         self.mic_off();
         self.chunks = None;
         self.practice = None;
         self.say = "Listen, and follow along with your finger!".into();
         // The page in one line: the voice says when it starts, and for how
         // long, so the words can be lit in time.
-        self.voice.say(text.split_whitespace().collect::<Vec<_>>().join(" "));
+        self.voice.say(line);
     }
 
     /// The word Fumi's at, reading aloud, by each word's share of the time.
@@ -680,8 +685,8 @@ impl Ondoku {
         self.done_at = self.now();
         self.go(Screen::Done, cx);
         let line = match times {
-            1 => format!("You read {}! Hooray!", self.library[book].title),
-            _ => "You read it again! Your reading gets smoother every time.".to_owned(),
+            1 => format!("You [read](red) {}! Hooray!", self.library[book].title),
+            _ => "You [read](red) it again! Your reading gets smoother every time.".to_owned(),
         };
         self.speak(line);
     }
@@ -758,8 +763,8 @@ impl Ondoku {
                 return;
             }
             let word = &s.current.words[p.word];
-            if heard.iter().any(|h| words::same(&word.key, h)) {
-                let yes = format!("Yes, {}!", plain(&word.text));
+            if heard.iter().any(|h| word.is(h)) {
+                let yes = format!("Yes, {}!", say_word(word));
                 self.practised(p.word, yes, cx);
                 return;
             }
@@ -832,10 +837,10 @@ impl Ondoku {
         self.practice = Some(Practice { word: w, part, modelled: false });
         self.speak(ask);
         // What she'll say next, ready while the kid tries it.
-        let said = plain(&self.reading.as_ref().unwrap().current.words[w].text);
+        let said = say_word(&self.reading.as_ref().unwrap().current.words[w]);
         self.voice.prepare([
             format!("It says {said}. Can you say {said}?"),
-            format!("Yes, {said}! You read the whole page!"),
+            format!("Yes, {said}! You [read](red) the whole page!"),
             format!("Yes, {said}! Keep reading!"),
         ]);
         self.fumi_until = self.now() + PROMPT_MS;
@@ -848,7 +853,7 @@ impl Ondoku {
     fn model_or_move_on(&mut self, cx: &mut Cx<Msg>) {
         let Some(p) = self.practice.clone() else { return };
         let Some(s) = &self.reading else { return };
-        let word = plain(&s.current.words[p.word].text);
+        let word = say_word(&s.current.words[p.word]);
         if p.modelled {
             self.practised(p.word, format!("That's {word}."), cx);
             return;
@@ -878,7 +883,11 @@ impl Ondoku {
             return;
         }
         let done = self.reading.as_ref().is_some_and(|s| s.current.done());
-        self.speak(if done { format!("{first} You read the whole page!") } else { format!("{first} Keep reading!") });
+        self.speak(if done {
+            format!("{first} You [read](red) the whole page!")
+        } else {
+            format!("{first} Keep reading!")
+        });
     }
 
     /// The reader has gone quiet in the middle of a page, having tried it:
@@ -915,10 +924,11 @@ impl Ondoku {
         let Some(s) = self.reading.as_mut() else { return };
         let Some(word) = s.current.words.get(w) else { return };
         let plain = plain(&word.text);
+        let said = say_word(word);
         s.current.help(w, now);
         let done = s.current.done();
         self.say = format!("That word is “{plain}”.");
-        self.voice.say(plain);
+        self.voice.say(said);
         if done {
             self.say = format!(
                 "That word is “{}”. You finished the page!",
@@ -1405,9 +1415,21 @@ impl Ondoku {
     }
 }
 
-/// A printed word as Fumi says it: without the punctuation around it.
+/// A kid's name as Fumi says it: as a grown-up spelt how it sounds, if
+/// they did.
+fn said_name(kid: &Profile) -> String {
+    hints::hint(&kid.name, kid.sounds_like.as_deref().unwrap_or_default())
+}
+
+/// A printed word without the punctuation around it.
 fn plain(text: &str) -> String {
     text.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_owned()
+}
+
+/// A word on the page as Fumi says it: plainly, with its hint if it has
+/// one ("[read](red)").
+fn say_word(word: &Word) -> String {
+    hints::hint(&plain(&word.text), &word.said.as_deref().map(plain).unwrap_or_default())
 }
 
 fn stage_event(e: &Event, size: Size, _: &Scene) -> Option<Msg> {
@@ -1538,8 +1560,7 @@ impl Program for Ondoku {
                 if let EarState::Ready(e) = &self.ears {
                     e.mute(s.seconds + 0.3);
                 }
-                let page = self.page_text().map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "));
-                if self.screen == Screen::Read && page.as_deref() == Some(s.text.as_str()) {
+                if self.screen == Screen::Read && self.page_voiced().as_deref() == Some(s.text.as_str()) {
                     self.aloud = Some((now, s.seconds));
                 }
             }

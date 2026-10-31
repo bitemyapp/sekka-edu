@@ -3,7 +3,10 @@
 //! read: lower case, letters and digits, numbers in words. What Whisper
 //! writes down is keyed the same way, so "10" heard matches "ten" printed,
 //! "Mr." matches "Mr.", and "there" matches "their" (a reader can't be
-//! heard spelling).
+//! heard spelling). A word read two ways carries a hint to how it's read
+//! here (`[read](red)`, sekka-voice's hints): read either way, it's right.
+
+use sekka_voice::hints;
 
 /// A word on the page.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -12,11 +15,24 @@ pub struct Word {
     pub text: String,
     /// What's read: empty for a lone dash or quote, which needn't be.
     pub key: String,
+    /// The word as it's said, when it has a hint: "red," for
+    /// "[read](red),".
+    pub said: Option<String>,
 }
 
 impl Word {
+    /// A word as the page has it, with its hint if it has one.
     pub fn new(text: &str) -> Word {
-        Word { text: text.to_owned(), key: key(text) }
+        let pieces = hints::pieces(text);
+        let shown: String = pieces.iter().map(|p| p.text).collect();
+        let said = pieces.iter().any(|p| p.said.is_some()).then(|| hints::said(text));
+        Word { key: key(&shown), text: shown, said }
+    }
+
+    /// Whether `heard` (a key) is this word read aloud: as it's spelt, or
+    /// as its hint says it.
+    pub fn is(&self, heard: &str) -> bool {
+        same(&self.key, heard) || self.said.as_deref().is_some_and(|s| same(&key(s), heard))
     }
 
     /// Whether it's read at all (a lone "—" isn't).
@@ -237,5 +253,18 @@ mod tests {
         assert!(!same("cat", "cap"));
         assert!(!same("sat", "set"));
         assert!(!same("is", "i"));
+    }
+
+    #[test]
+    fn a_word_with_a_hint_is_printed_plainly_and_read_either_way() {
+        let w = Word::new("[read](red),");
+        assert_eq!((w.text.as_str(), w.key.as_str(), w.said.as_deref()), ("read,", "read", Some("red,")));
+        assert!(w.is("read") && w.is("red"));
+        assert!(!w.is("reed"));
+        assert!(!Word::new("bow").is("bough"), "only where a hint says");
+        assert!(Word::new("[bow](bough)").is("bough"));
+        assert_eq!(words("You [read](red) it.").len(), 3);
+        let w = Word::new("sneezed—'[Kertyschoo](Kertishoo)!'");
+        assert_eq!(w.said.as_deref(), Some("sneezed—'Kertishoo!'"), "the rest of it kept");
     }
 }

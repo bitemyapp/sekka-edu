@@ -113,6 +113,16 @@ fn a_first_reader_makes_a_card_and_meets_their_shelf() {
 }
 
 #[test]
+fn a_name_is_said_as_it_sounds_and_shown_as_written() {
+    let mut r = ondoku("name", ThemeChoice::Day, &[HANA]);
+    let mut hana = r.store.profiles()[0].clone();
+    hana.sounds_like = Some("Hah-nah".into());
+    r.store.update(&hana).unwrap();
+    r.key(NamedKey::Enter);
+    assert_eq!(r.h.program().says(), "Hi, Hana! Let's read a book.");
+}
+
+#[test]
 fn reading_a_whole_book_to_fumi() {
     let mut r = ondoku("book", ThemeChoice::Day, &[HANA]);
     r.key(NamedKey::Enter);
@@ -246,6 +256,7 @@ fn a_misread_word_is_practised() {
     assert_eq!((page.marks[0], page.marks[4]), (Mark::Helped, Mark::Helped));
     assert_eq!(p.practising(), None);
     assert!(p.says().starts_with("Yes, Bud!") && p.says().contains("whole page"), "{}", p.says());
+    assert!(!p.says().contains('['), "shown without its hint: {}", p.says());
 }
 
 /// Missed mid-page, a word is asked about when the reader stops, after a

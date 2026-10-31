@@ -50,7 +50,7 @@ enum Step {
 
 /// The cost of `heard` read as `printed[..j]`, at its best, for each `j`;
 /// and how to get there.
-fn line_up(printed: &[&str], heard: &[String]) -> (Vec<f64>, Vec<Vec<Option<Step>>>) {
+fn line_up(printed: &[&Word], heard: &[String]) -> (Vec<f64>, Vec<Vec<Option<Step>>>) {
     let (n, m) = (printed.len(), heard.len());
     let mut cost = vec![vec![f64::INFINITY; m + 1]; n + 1];
     let mut how = vec![vec![None; m + 1]; n + 1];
@@ -68,13 +68,13 @@ fn line_up(printed: &[&str], heard: &[String]) -> (Vec<f64>, Vec<Vec<Option<Step
                 }
             };
             if j < n && i < m {
-                if words::same(printed[j], &heard[i]) {
+                if printed[j].is(&heard[i]) {
                     relax(j + 1, i + 1, 0.0, Step::Match(1));
                 } else {
                     relax(j + 1, i + 1, 1.0, Step::Swap);
                 }
                 // "fir tree" heard for "fir-tree".
-                if i + 1 < m && words::same(printed[j], &format!("{}{}", heard[i], heard[i + 1])) {
+                if i + 1 < m && printed[j].is(&format!("{}{}", heard[i], heard[i + 1])) {
                     relax(j + 1, i + 2, 0.0, Step::Match(2));
                 }
             }
@@ -128,7 +128,7 @@ impl Page {
         // A reader can't get further than every heard word reading one
         // printed word, and a few skipped.
         let window = self.window(heard.len() + 6);
-        let printed: Vec<&str> = window.iter().map(|i| self.words[*i].key.as_str()).collect();
+        let printed: Vec<&Word> = window.iter().map(|i| &self.words[*i]).collect();
         let (ends, how) = line_up(&printed, heard);
         // The end that costs least, and of those the furthest: trailing
         // printed words not heard would cost, so it ends on a heard word.
@@ -244,9 +244,7 @@ impl Page {
         let back = said.len().max(1) + 2;
         let behind: Vec<usize> = (0..self.next).rev().filter(|i| self.words[*i].spoken()).take(back).collect();
         for w in said {
-            if let Some(&i) =
-                behind.iter().find(|&&i| self.marks[i] == Mark::Missed && words::same(&self.words[i].key, w))
-            {
+            if let Some(&i) = behind.iter().find(|&&i| self.marks[i] == Mark::Missed && self.words[i].is(w)) {
                 self.marks[i] = Mark::Read;
             }
         }
@@ -336,6 +334,15 @@ mod tests {
         assert_eq!(marks(&p), "rrmrr...");
         assert_eq!(p.heard_as[2], None, "left out, not misread");
         assert_eq!(p.next, 5);
+    }
+
+    #[test]
+    fn a_word_read_as_its_hint_says_is_read() {
+        let mut p = Page::new("Each made a low [bow](bough), and said");
+        assert_eq!(p.words[4].text, "bow,");
+        p.hear("Each made a low bough and said", 0);
+        assert!(p.done());
+        assert_eq!(marks(&p), "rrrrrrr");
     }
 
     #[test]

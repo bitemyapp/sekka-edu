@@ -2,9 +2,12 @@
 //! and children's classics from Project Gutenberg (`library/SOURCES.md`).
 //! Each is a text file in `library/<shelf>/`: `key: value` lines, a blank
 //! line, then pages separated by `===` lines, paragraphs (or stanzas) by
-//! blank lines, and lines of verse kept on lines of their own.
+//! blank lines, and lines of verse kept on lines of their own. A word the
+//! voice would say wrong there carries a hint to how it's said: "each
+//! made a low [bow](bough)".
 
 use sekka_kid::{Animal, Grade};
+use sekka_voice::hints;
 
 include!(concat!(env!("OUT_DIR"), "/books.rs"));
 
@@ -82,6 +85,10 @@ pub struct Book {
     /// Each page's text: paragraphs apart by a blank line, verse lines by
     /// a line break.
     pub pages: Vec<String>,
+    /// Each page as written, with its pronunciation hints for the voice
+    /// (`[read](red)`, sekka-voice's hints): `pages` is each as shown. A
+    /// hint is a word, said as a word, so both have the same words.
+    pub voiced: Vec<String>,
 }
 
 impl Book {
@@ -102,6 +109,7 @@ impl Book {
             color: 0x5d8fd6,
             about: String::new(),
             pages: Vec::new(),
+            voiced: Vec::new(),
         };
         for line in head.lines() {
             let (k, v) = line.split_once(':').ok_or_else(|| format!("not `key: value`: {line}"))?;
@@ -131,16 +139,24 @@ impl Book {
             if line.trim() == "===" {
                 let p = page.join("\n").trim().to_owned();
                 if !p.is_empty() {
-                    b.pages.push(p);
+                    b.voiced.push(p);
                 }
                 page.clear();
             } else {
                 page.push(line.trim_end());
             }
         }
-        if b.pages.is_empty() {
+        if b.voiced.is_empty() {
             return Err("no pages".into());
         }
+        for p in b.voiced.iter().flat_map(|v| hints::pieces(v)) {
+            if let Some(said) = p.said
+                && (p.text.is_empty() || p.text.contains(char::is_whitespace) || said.contains(char::is_whitespace))
+            {
+                return Err(format!("a hint is a word, said as a word: [{}]({said})", p.text));
+            }
+        }
+        b.pages = b.voiced.iter().map(|v| hints::shown(v)).collect();
         Ok(b)
     }
 
@@ -178,10 +194,12 @@ pub fn all() -> Vec<Book> {
 /// Split each page that doesn't `fit` into pages that do: whole paragraphs
 /// while they fit together, then a paragraph's lines of verse or its
 /// sentences, then (only for a sentence too long by itself) its words. A
-/// page that fits is left alone.
+/// page that fits is left alone. Pages are split as written, hints and
+/// all, and fitted as they're shown.
 pub fn paginate(book: &mut Book, fits: impl Fn(&str) -> bool) {
+    let fits = |text: &str| fits(&hints::shown(text));
     let mut out = Vec::new();
-    for page in std::mem::take(&mut book.pages) {
+    for page in std::mem::take(&mut book.voiced) {
         if fits(&page) {
             out.push(page);
             continue;
@@ -220,7 +238,8 @@ pub fn paginate(book: &mut Book, fits: impl Fn(&str) -> bool) {
             out.push(current);
         }
     }
-    book.pages = out;
+    book.pages = out.iter().map(|v| hints::shown(v)).collect();
+    book.voiced = out;
 }
 
 /// A paragraph's sentences: each ends at . ! or ?, with any closing quote
@@ -287,11 +306,30 @@ mod tests {
     }
 
     #[test]
+    fn a_page_is_shown_plainly_and_voiced_with_its_hints() {
+        let head = "title: T\nlevel: 3\nskills: fluency\ncover: owl, #333333\nabout: x\n\n";
+        let mut b =
+            Book::parse("t", false, &format!("{head}She had [read](red) it. Then she [read](red) more.\n")).unwrap();
+        assert_eq!(b.pages, ["She had read it. Then she read more."]);
+        assert_eq!(b.voiced, ["She had [read](red) it. Then she [read](red) more."]);
+        // Split as it's shown, each half keeping its hint.
+        paginate(&mut b, |t| t.split_whitespace().count() <= 4 && !t.contains('['));
+        assert_eq!(b.pages, ["She had read it.", "Then she read more."]);
+        assert_eq!(b.voiced, ["She had [read](red) it.", "Then she [read](red) more."]);
+        assert!(Book::parse("t", false, &format!("{head}A [big dog](dog) ran.")).is_err(), "one word");
+        assert!(Book::parse("t", false, &format!("{head}A [dog](big dog) ran.")).is_err(), "said as one");
+    }
+
+    #[test]
     fn every_bundled_book_reads() {
         assert_eq!(all().len(), BOOKS.len(), "a bundled book failed to read (see the log)");
         for b in all() {
             assert!(!b.about.is_empty(), "{}: about", b.id);
             assert!(!b.skills.is_empty(), "{}: skills", b.id);
+            for (shown, voiced) in b.pages.iter().zip(&b.voiced) {
+                assert_eq!(*shown, hints::shown(voiced), "{}", b.id);
+                assert_eq!(shown.split_whitespace().count(), voiced.split_whitespace().count(), "{}", b.id);
+            }
         }
     }
 

@@ -92,6 +92,7 @@ fn kids(name: &str, theme: ThemeChoice) -> (Harness<Kids>, Store) {
     let s = store(name);
     let mut app = Kids::new(s.clone());
     app.clock = Rc::new(afternoon);
+    app.quiet = true;
     (Harness::with(app, Appearance { theme, ..Appearance::default() }, false), s)
 }
 
@@ -137,9 +138,12 @@ fn changes_need_a_grown_up_and_reach_every_app() {
     h.send(Msg::Form(FormMsg::Limit(true)));
     h.send(Msg::Form(FormMsg::Minutes(25.0)));
     h.send(Msg::Form(FormMsg::Name("Hana-chan".into())));
+    h.send(Msg::Form(FormMsg::SoundsLike("Hah-nah-chahn ".into())));
+    h.send(Msg::Form(FormMsg::Hear));
     h.send(Msg::Form(FormMsg::Save));
     let hana = s.profiles().into_iter().find(|k| k.name == "Hana-chan").unwrap();
     assert_eq!(hana.daily_minutes, Some(25));
+    assert_eq!(hana.sounds_like.as_deref(), Some("Hah-nah-chahn"), "how the apps say it");
     assert!(h.texts(w).iter().any(|t| t.starts_with("Today: 8 min of 25 min")), "{:?}", h.texts(w));
     // Open now: removing asks only to be sure.
     h.send(Msg::Select(1));
