@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/sekka-kid", "crates/sekka-kid-kit", "apps/anzan", "apps/kids"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bitemyapp/sekka-edu"
+
+[workspace.dependencies]
+# Aizome's widget kit, from a Sekka checkout beside this one (DEVELOPERS.md).
+aizome-kit = { path = "../sekka/desktop/aizome/crates/aizome-kit" }
+sekka-kid = { path = "crates/sekka-kid" }
+sekka-kid-kit = { path = "crates/sekka-kid-kit" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 2
+
+# tiny-skia's portable SIMD wraps 16-bit lanes on purpose; overflow checks in
+# debug builds turn some blend modes into panics (Sukumo's Cargo.toml).
+[profile.dev.package.tiny-skia]
+overflow-checks = false
+
+[profile.release]
+debug = "line-tables-only"
+lto = "thin"
+codegen-units = 4

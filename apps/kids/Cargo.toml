@@ -1,0 +1,23 @@
+[package]
+name = "sekka-kids"
+description = "Sekka Kids: the grown-ups' place for kids' profiles, daily time and reports across Sekka Edu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sekka_kids"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sekka-kids"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+sekka-kid.workspace = true
+sekka-kid-kit.workspace = true
+log.workspace = true
+env_logger.workspace = true

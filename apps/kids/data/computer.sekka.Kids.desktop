@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Sekka Kids
+GenericName=Kids' Profiles
+Comment=Kids' cards, daily time and reports across Sekka Edu, for grown-ups
+Keywords=kids;children;parents;profiles;reports;screen time;education;
+Categories=Education;Utility;
+Icon=computer.sekka.Kids
+Exec=sekka-kids
+Terminal=false
+StartupNotify=true
+StartupWMClass=computer.sekka.Kids

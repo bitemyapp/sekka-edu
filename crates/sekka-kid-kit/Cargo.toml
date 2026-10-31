@@ -1,0 +1,13 @@
+[package]
+name = "sekka-kid-kit"
+description = "What Sekka Edu apps share on screen: kids' animals, who's playing, the grown-ups' door and reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-kit.workspace = true
+sekka-kid.workspace = true
+log.workspace = true

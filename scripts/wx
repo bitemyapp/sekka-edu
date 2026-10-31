@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Build and test on wx-workstation, where Aizome's kit is built (DEVELOPERS.md):
+#
+#   scripts/wx sync            copy this tree and the kit's part of Sekka over
+#   scripts/wx shell           make (once) the rooted Aizome dev shell there
+#   scripts/wx run CMD...      sync, then run CMD in the dev shell there
+#
+# SEKKA (default ../sekka) is the Sekka checkout whose desktop/aizome the
+# kit comes from; SEKKA_REV the revision whose dev shell is used.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")/.." && pwd)"
+sekka="${SEKKA:-$here/../sekka}"
+rev="${SEKKA_REV:-main}"
+host="${WX_HOST:-wx-workstation}"
+remote="sekka-work/edu"
+nix=/nix/var/nix/profiles/default/bin/nix
+
+sync() {
+  ssh "$host" "mkdir -p ~/$remote/sekka-edu ~/$remote/sekka/desktop/aizome/crates ~/$remote/sekka/desktop/aizome/sukumo"
+  rsync -rlpD --checksum --delete --exclude /target --exclude .git "$here/" "$host:$remote/sekka-edu/"
+  local a="$sekka/desktop/aizome"
+  rsync -rlpD --checksum "$a/Cargo.toml" "$host:$remote/sekka/desktop/aizome/"
+  rsync -rlpD --checksum "$a/sukumo/Cargo.toml" "$host:$remote/sekka/desktop/aizome/sukumo/"
+  rsync -rlpD --checksum --delete "$a/sukumo/crates/" "$host:$remote/sekka/desktop/aizome/sukumo/crates/"
+  for c in aizome-kit aizome-theme aizome-config aizome-shell-proto; do
+    rsync -rlpD --checksum --delete --exclude target "$a/crates/$c/" "$host:$remote/sekka/desktop/aizome/crates/$c/"
+  done
+}
+
+shell() {
+  # A rooted profile: the host's min-free GC removes unrooted shells.
+  ssh "$host" "set -e; cd ~/$remote
+    if [ ! -e aizome-profile ]; then
+      $nix develop --profile aizome-profile 'github:bitemyapp/sekka/$rev#aizome' -c true
+    fi
+    if [ ! -e env.sh ] || [ aizome-profile -nt env.sh ]; then
+      $nix print-dev-env ./aizome-profile | grep -v 'eval \"\${shellHook:-}\"' > env.sh
+    fi
+    # Aizome's type, for pictures drawn as the session draws them.
+    if [ ! -e fonts ]; then
+      $nix build 'github:bitemyapp/sekka/$rev#aizome-fonts' --out-link fonts
+    fi
+    echo ok"
+}
+
+run() {
+  sync
+  shell >/dev/null
+  local cmd
+  printf -v cmd '%q ' "$@"
+  # The login shell there is zsh; the dev shell's environment is bash's.
+  ssh "$host" bash -s <<EOF
+set -e
+cd ~/$remote
+source ./env.sh
+cd sekka-edu
+export CARGO_TARGET_DIR=/dev/shm/sekka-edu-target CARGO_PROFILE_DEV_DEBUG=0
+export AIZOME_FONT_DIR=\${AIZOME_FONT_DIR:-\$HOME/$remote/fonts}
+# wx's /bin/sh is dash, which drops the hyphenated variables a #!/bin/sh
+# rustc wrapper must pass on: run the dev shell's wrapper with bash.
+if [ -n "\${RUSTC_WRAPPER:-}" ]; then
+  { echo "#!\$(command -v bash)"; tail -n +2 "\$RUSTC_WRAPPER"; } > /dev/shm/sekka-edu-rustc-wrapper
+  chmod +x /dev/shm/sekka-edu-rustc-wrapper
+  export RUSTC_WRAPPER=/dev/shm/sekka-edu-rustc-wrapper
+fi
+$cmd
+EOF
+}
+
+case "${1:-}" in
+  sync) sync ;;
+  shell) shell ;;
+  run) shift; run "$@" ;;
+  *) echo "usage: scripts/wx sync | shell | run CMD..." >&2; exit 2 ;;
+esac

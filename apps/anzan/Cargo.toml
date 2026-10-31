@@ -1,0 +1,25 @@
+[package]
+name = "sekka-anzan"
+description = "Anzan 暗算, the mental abacus: a soroban for kindergarten and first grade, then the beads in your head"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sekka_anzan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sekka-anzan"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+sekka-kid.workspace = true
+sekka-kid-kit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true

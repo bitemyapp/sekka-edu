@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Anzan
+GenericName=Mental Abacus
+Comment=A soroban for kindergarten and first grade, then the beads in your head
+Keywords=abacus;soroban;anzan;math;counting;adding;kids;children;kindergarten;
+Categories=Education;Math;KidsGame;
+Icon=computer.sekka.Anzan
+Exec=sekka-anzan
+Terminal=false
+StartupNotify=true
+StartupWMClass=computer.sekka.Anzan
